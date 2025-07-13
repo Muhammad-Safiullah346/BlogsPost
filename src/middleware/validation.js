@@ -1,0 +1,72 @@
+const Joi = require("joi");
+
+const validateRegistration = (req, res, next) => {
+  const schema = Joi.object({
+    username: Joi.string().min(3).max(30).required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    firstName: Joi.string().max(50).optional(),
+    lastName: Joi.string().max(50).optional(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
+const validateLogin = (req, res, next) => {
+  const schema = Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().required(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
+const validatePost = (req, res, next) => {
+  const schema = Joi.object({
+    title: Joi.string().max(200).required(),
+    content: Joi.string().required(),
+    tags: Joi.array().items(Joi.string().max(50)).optional(),
+    featuredImage: Joi.string().uri().optional(),
+    excerpt: Joi.string().max(300).optional(),
+    status: Joi.string().valid("draft", "published", "archived").optional(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
+const validateInteraction = (req, res, next) => {
+  const schema = Joi.object({
+    type: Joi.string().valid("like", "comment", "repost").required(),
+    content: Joi.string().when("type", {
+      is: Joi.string().valid("comment", "repost"),
+      then: Joi.required(),
+      otherwise: Joi.optional(),
+    }),
+    parentComment: Joi.string().optional(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
+module.exports = {
+  validateRegistration,
+  validateLogin,
+  validatePost,
+  validateInteraction,
+};
