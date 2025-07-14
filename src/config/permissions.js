@@ -175,7 +175,7 @@ const conditionalPermissions = {
   interactions: {
     Create: {
       user: (post, user) => {
-        // Users can only interact with published posts
+        // UPDATED: Users can only interact with published posts (not even their own drafts)
         return post.status === "published";
       },
     },
@@ -191,7 +191,7 @@ const conditionalPermissions = {
   likes: {
     Create: {
       user: (post, user) => {
-        // Users can only like published posts
+        // UPDATED: Users can only like published posts (not even their own drafts)
         return post.status === "published";
       },
     },
@@ -207,7 +207,7 @@ const conditionalPermissions = {
   comments: {
     Create: {
       user: (post, user) => {
-        // Users can only comment on published posts
+        // UPDATED: Users can only comment on published posts (not even their own drafts)
         return post.status === "published";
       },
     },

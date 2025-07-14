@@ -15,17 +15,25 @@ const createInteraction = async (req, res) => {
       }
     }
 
+    // UPDATED: Enforce draft post restrictions more strictly
+    if (post.status === "draft") {
+      return res.status(403).json({
+        error:
+          "Cannot interact with draft posts. Please publish the post first.",
+      });
+    }
+
     // Check if post is archived and user is not the author
     if (
       post.status === "archived" &&
       post.author.toString() !== req.user._id.toString()
     ) {
       return res.status(403).json({
-        error: "Cannot interact with archived posts",
+        error: "Cannot interact with archived posts that are not yours",
       });
     }
 
-    // Regular users can only interact with published posts
+    // Only published posts can be interacted with by regular users
     if (req.userRole === "user" && post.status !== "published") {
       return res.status(403).json({
         error: "Can only interact with published posts",

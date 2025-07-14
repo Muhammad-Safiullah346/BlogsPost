@@ -180,6 +180,13 @@ const createRepost = async (req, res) => {
       return res.status(404).json({ error: "Original post not found" });
     }
 
+    // UPDATED: Enhanced draft post restrictions
+    if (originalPost.status === "draft") {
+      return res.status(403).json({
+        error: "Cannot repost draft content. Please publish the post first.",
+      });
+    }
+
     // Check if user can repost based on original post status
     if (originalPost.status === "archived") {
       // Only the author, admin, and superadmin can repost archived posts
@@ -188,20 +195,13 @@ const createRepost = async (req, res) => {
         originalPost.author.toString() !== req.user._id.toString()
       ) {
         return res.status(403).json({
-          error: "Cannot repost archived content",
+          error: "Cannot repost archived content that is not yours",
         });
       }
-    } else if (originalPost.status === "draft") {
-      // Only the author, admin, and superadmin can repost draft posts
-      if (
-        req.userRole === "user" &&
-        originalPost.author.toString() !== req.user._id.toString()
-      ) {
-        return res.status(403).json({
-          error: "Cannot repost draft content",
-        });
-      }
-    } else if (originalPost.status !== "published" && req.userRole === "user") {
+    }
+
+    // Regular users can only repost published content
+    if (req.userRole === "user" && originalPost.status !== "published") {
       return res.status(403).json({
         error: "Can only repost published content",
       });

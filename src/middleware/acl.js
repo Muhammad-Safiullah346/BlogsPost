@@ -152,36 +152,51 @@ const checkInteractionPermission = (action) => {
       // Check based on user role and post status
       if (userRole === "superadmin" || userRole === "admin") {
         // Superadmin and admin can perform any action
+        req.post = post;
         return next();
       }
 
-      if (userRole === "user") {
-        // Regular users have conditional permissions
-        const condition = conditionalPermissions.interactions?.[action]?.user;
-        if (!condition) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-
-        const hasAccess = condition(post, req.user);
-        if (!hasAccess) {
-          if (action === "Create") {
-            return res.status(403).json({
-              error: "Cannot interact with archived posts",
-            });
-          } else {
-            return res.status(403).json({ error: "Access denied" });
-          }
-        }
-      } else if (userRole === "unknown") {
-        // Unknown users can only read interactions on published posts
-        if (action !== "Read" || post.status !== "published") {
-          return res.status(403).json({ error: "Access denied" });
-        }
+      // NEW LOGIC: Draft posts cannot be interacted with by anyone (including author)
+      if (post.status === "draft") {
+        return res.status(403).json({
+          error:
+            "Cannot interact with draft posts. Please publish the post first.",
+        });
       }
 
-      // Store post in request for use in controller
-      req.post = post;
-      next();
+      if (userRole === "user") {
+        // For published posts, users can interact normally
+        if (post.status === "published") {
+          req.post = post;
+          return next();
+        }
+
+        // For archived posts, check if user is the author
+        if (post.status === "archived") {
+          if (post.author.toString() !== req.user._id.toString()) {
+            return res.status(403).json({
+              error: "Cannot interact with archived posts that are not yours",
+            });
+          }
+          req.post = post;
+          return next();
+        }
+
+        // For any other status, deny access
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      if (userRole === "unknown") {
+        // Unknown users can only interact with published posts
+        if (post.status === "published") {
+          req.post = post;
+          return next();
+        }
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Default deny
+      return res.status(403).json({ error: "Access denied" });
     } catch (error) {
       return res.status(500).json({ error: "Permission check failed" });
     }
