@@ -135,6 +135,59 @@ const checkConditionalPermission = (model, ownerField = null) => {
   };
 };
 
+// Enhanced function to check interaction permissions for specific posts
+const checkInteractionPermission = (action) => {
+  return async (req, res, next) => {
+    try {
+      const { postId } = req.params;
+      const userRole = req.userRole || "unknown";
+      const Post = require("../models/Post");
+
+      // Get the post to check its status
+      const post = await Post.findById(postId);
+      if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+      }
+
+      // Check based on user role and post status
+      if (userRole === "superadmin" || userRole === "admin") {
+        // Superadmin and admin can perform any action
+        return next();
+      }
+
+      if (userRole === "user") {
+        // Regular users have conditional permissions
+        const condition = conditionalPermissions.interactions?.[action]?.user;
+        if (!condition) {
+          return res.status(403).json({ error: "Access denied" });
+        }
+
+        const hasAccess = condition(post, req.user);
+        if (!hasAccess) {
+          if (action === "Create") {
+            return res.status(403).json({
+              error: "Cannot interact with archived posts",
+            });
+          } else {
+            return res.status(403).json({ error: "Access denied" });
+          }
+        }
+      } else if (userRole === "unknown") {
+        // Unknown users can only read interactions on published posts
+        if (action !== "Read" || post.status !== "published") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+      }
+
+      // Store post in request for use in controller
+      req.post = post;
+      next();
+    } catch (error) {
+      return res.status(500).json({ error: "Permission check failed" });
+    }
+  };
+};
+
 // Helper function to apply conditional filters in controllers
 const applyConditionalFilter = (query, req) => {
   if (req.conditionalPermission) {
@@ -143,7 +196,7 @@ const applyConditionalFilter = (query, req) => {
     // Apply filters based on resource and action
     if (resource === "posts" && action === "Read") {
       if (req.userRole === "user") {
-        // Users can see all published posts OR their own posts
+        // Users can see all published posts OR their own posts (draft/archived)
         query.$or = [{ status: "published" }, { author: req.user._id }];
       }
     }
@@ -160,5 +213,6 @@ module.exports = {
   checkPermission,
   checkOwnership,
   checkConditionalPermission,
+  checkInteractionPermission,
   applyConditionalFilter,
 };

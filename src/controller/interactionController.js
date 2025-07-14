@@ -6,10 +6,30 @@ const createInteraction = async (req, res) => {
     const { postId } = req.params;
     const { type, content, parentComment } = req.body;
 
-    // Check if post exists
-    const post = await Post.findById(postId);
+    // Check if post exists (should be available from middleware)
+    let post = req.post;
     if (!post) {
-      return res.status(404).json({ error: "Post not found" });
+      post = await Post.findById(postId);
+      if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+      }
+    }
+
+    // Check if post is archived and user is not the author
+    if (
+      post.status === "archived" &&
+      post.author.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({
+        error: "Cannot interact with archived posts",
+      });
+    }
+
+    // Regular users can only interact with published posts
+    if (req.userRole === "user" && post.status !== "published") {
+      return res.status(403).json({
+        error: "Can only interact with published posts",
+      });
     }
 
     // For likes, check if user already liked
@@ -61,6 +81,46 @@ const getInteractions = async (req, res) => {
   try {
     const { postId } = req.params;
     const { type, page = 1, limit = 10 } = req.query;
+
+    // Check if post exists and user has permission to view interactions
+    let post = req.post;
+    if (!post) {
+      post = await Post.findById(postId);
+      if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+      }
+    }
+
+    // Check permissions based on post status and user role
+    if (post.status === "archived") {
+      // Only author, admin, and superadmin can view interactions on archived posts
+      if (
+        req.userRole === "user" &&
+        post.author.toString() !== req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          error: "Cannot view interactions on archived posts",
+        });
+      }
+      if (req.userRole === "unknown") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+    } else if (post.status === "draft") {
+      // Only author, admin, and superadmin can view interactions on draft posts
+      if (
+        req.userRole === "user" &&
+        post.author.toString() !== req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          error: "Cannot view interactions on draft posts",
+        });
+      }
+      if (req.userRole === "unknown") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+    } else if (post.status !== "published" && req.userRole === "unknown") {
+      return res.status(403).json({ error: "Access denied" });
+    }
 
     const query = { post: postId, isActive: true };
     if (type) {

@@ -99,24 +99,24 @@ const rolePermissions = {
     },
     reposts: {
       Create: "own",
-      Read: "any",
+      Read: "conditional", // Only published posts can be reposted
       Update: "own",
       Delete: "own",
     },
     interactions: {
-      Create: "own",
-      Read: "any",
+      Create: "conditional", // Only on published posts
+      Read: "conditional", // Can read all interactions on published posts, own interactions on archived posts
       Update: "own",
       Delete: "own",
     },
     likes: {
-      Create: "own",
-      Read: "any",
+      Create: "conditional", // Only on published posts
+      Read: "conditional", // Can read all likes on published posts, own likes on archived posts
       Delete: "own",
     },
     comments: {
-      Create: "own",
-      Read: "any",
+      Create: "conditional", // Only on published posts
+      Read: "conditional", // Can read all comments on published posts, own comments on archived posts
       Update: "own",
       Delete: "own",
     },
@@ -133,13 +133,13 @@ const rolePermissions = {
       Read: "published_only",
     },
     interactions: {
-      Read: "any",
+      Read: "published_only",
     },
     likes: {
-      Read: "any",
+      Read: "published_only",
     },
     comments: {
-      Read: "any",
+      Read: "published_only",
     },
     users: {},
   },
@@ -153,6 +153,69 @@ const conditionalPermissions = {
         // Users can read all published posts
         if (post.status === "published") return true;
         // Users can only read their own draft/archived posts
+        return post.author.toString() === user._id.toString();
+      },
+    },
+  },
+  reposts: {
+    Create: {
+      user: (post, user) => {
+        // Users can only repost published posts
+        return post.status === "published";
+      },
+    },
+    Read: {
+      user: (post, user) => {
+        // Users can read all published posts or their own archived posts
+        if (post.status === "published") return true;
+        return post.author.toString() === user._id.toString();
+      },
+    },
+  },
+  interactions: {
+    Create: {
+      user: (post, user) => {
+        // Users can only interact with published posts
+        return post.status === "published";
+      },
+    },
+    Read: {
+      user: (post, user) => {
+        // Users can read all interactions on published posts
+        if (post.status === "published") return true;
+        // Users can read all interactions on their own archived posts
+        return post.author.toString() === user._id.toString();
+      },
+    },
+  },
+  likes: {
+    Create: {
+      user: (post, user) => {
+        // Users can only like published posts
+        return post.status === "published";
+      },
+    },
+    Read: {
+      user: (post, user) => {
+        // Users can read all likes on published posts
+        if (post.status === "published") return true;
+        // Users can read all likes on their own archived posts
+        return post.author.toString() === user._id.toString();
+      },
+    },
+  },
+  comments: {
+    Create: {
+      user: (post, user) => {
+        // Users can only comment on published posts
+        return post.status === "published";
+      },
+    },
+    Read: {
+      user: (post, user) => {
+        // Users can read all comments on published posts
+        if (post.status === "published") return true;
+        // Users can read all comments on their own archived posts
         return post.author.toString() === user._id.toString();
       },
     },

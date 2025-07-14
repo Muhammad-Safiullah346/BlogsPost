@@ -180,15 +180,31 @@ const createRepost = async (req, res) => {
       return res.status(404).json({ error: "Original post not found" });
     }
 
-    // Check if user can access the original post
-    if (
-      originalPost.status !== "published" &&
-      originalPost.author.toString() !== req.user._id.toString() &&
-      req.userRole === "user"
-    ) {
-      return res
-        .status(403)
-        .json({ error: "Cannot repost inaccessible content" });
+    // Check if user can repost based on original post status
+    if (originalPost.status === "archived") {
+      // Only the author, admin, and superadmin can repost archived posts
+      if (
+        req.userRole === "user" &&
+        originalPost.author.toString() !== req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          error: "Cannot repost archived content",
+        });
+      }
+    } else if (originalPost.status === "draft") {
+      // Only the author, admin, and superadmin can repost draft posts
+      if (
+        req.userRole === "user" &&
+        originalPost.author.toString() !== req.user._id.toString()
+      ) {
+        return res.status(403).json({
+          error: "Cannot repost draft content",
+        });
+      }
+    } else if (originalPost.status !== "published" && req.userRole === "user") {
+      return res.status(403).json({
+        error: "Can only repost published content",
+      });
     }
 
     const repost = new Post({

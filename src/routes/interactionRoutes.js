@@ -1,7 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { auth, requireAuth } = require("./../middleware/auth.js");
-const { checkPermission, checkOwnership } = require("./../middleware/acl.js");
+const {
+  checkPermission,
+  checkOwnership,
+  checkInteractionPermission,
+} = require("./../middleware/acl.js");
 const { validateInteraction } = require("./../middleware/validation.js");
 const {
   createInteraction,
@@ -11,23 +15,24 @@ const {
 } = require("./../controller/interactionController.js");
 const Interaction = require("./../models/Interaction.js");
 
-// Public routes
+// Public routes - can be accessed by unknown users for published posts
 router.get(
   "/post/:postId",
   auth,
-  checkPermission("interactions", "Read"),
+  checkInteractionPermission("Read"),
   getInteractions
 );
 
-// Protected routes
+// Protected routes - require authentication
 router.post(
   "/post/:postId",
   auth,
   requireAuth,
-  checkPermission("interactions", "Create"),
+  checkInteractionPermission("Create"),
   validateInteraction,
   createInteraction
 );
+
 router.put(
   "/:id",
   auth,
@@ -36,6 +41,7 @@ router.put(
   checkOwnership(Interaction),
   updateInteraction
 );
+
 router.delete(
   "/:id",
   auth,
