@@ -5,6 +5,7 @@ const {
   checkPermission,
   checkOwnership,
   checkInteractionPermission,
+  checkModerationPermission,
 } = require("./../middleware/acl.js");
 const { validateInteraction } = require("./../middleware/validation.js");
 const {
@@ -33,12 +34,16 @@ router.post(
   createInteraction
 );
 
+// Updated routes with moderation support
 router.put(
   "/:id",
   auth,
   requireAuth,
   checkPermission("interactions", "Update"),
+  // First check ownership (for own interactions)
   checkOwnership(Interaction),
+  // Then check moderation permissions (for admin/superadmin)
+  checkModerationPermission(Interaction),
   updateInteraction
 );
 
@@ -47,7 +52,10 @@ router.delete(
   auth,
   requireAuth,
   checkPermission("interactions", "Delete"),
+  // First check ownership (for own interactions)
   checkOwnership(Interaction),
+  // Then check moderation permissions (for admin/superadmin)
+  checkModerationPermission(Interaction),
   deleteInteraction
 );
 

@@ -1,128 +1,113 @@
-const permissions = {
-  posts: {
-    permissions: ["Create", "Read", "Update", "Delete"],
-    types: {
-      reposts: ["Create", "Read", "Update", "Delete"],
-      interactions: {
-        permissions: ["Create", "Read", "Update", "Delete"],
-        types: {
-          likes: ["Create", "Read", "Update", "Delete"],
-          comments: ["Create", "Read", "Update", "Delete"],
-          reposts: ["Create", "Read", "Update", "Delete"],
-        },
-      },
-    },
-  },
-};
-
 const rolePermissions = {
   superadmin: {
     posts: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Superadmin can create their own posts
+      Read: "any", // Can read all posts for moderation
+      Update: "any", // Can moderate/edit any post
+      Delete: "any", // Can delete any post for moderation
     },
     reposts: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can create their own reposts
+      Read: "any", // Can read all reposts
+      Update: "any", // Can moderate reposts
+      Delete: "any", // Can delete any repost
     },
     interactions: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can create their own interactions
+      Read: "any", // Can read all interactions for moderation
+      Update: "any", // Can moderate interactions
+      Delete: "any", // Can delete any interaction
     },
     likes: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can like posts themselves
+      Read: "any", // Can see all likes
+      Update: "own", // Can only update their own likes
+      Delete: "any", // Can delete any like for moderation
     },
     comments: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can comment themselves
+      Read: "any", // Can read all comments
+      Update: "any", // Can moderate comments
+      Delete: "any", // Can delete any comment
     },
     users: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "any", // Can create user accounts
+      Read: "any", // Can view all users
+      Update: "any", // Can modify user accounts
+      Delete: "any", // Can delete/deactivate users
     },
   },
   admin: {
     posts: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Admin can create their own posts
+      Read: "any", // Can read all posts for moderation
+      Update: "moderate", // Can moderate posts (special permission)
+      Delete: "moderate", // Can delete posts for moderation
     },
     reposts: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can create their own reposts
+      Read: "any", // Can read all reposts
+      Update: "moderate", // Can moderate reposts
+      Delete: "moderate", // Can delete reposts
     },
     interactions: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can create their own interactions
+      Read: "any", // Can read all interactions
+      Update: "moderate", // Can moderate interactions
+      Delete: "moderate", // Can delete interactions
     },
     likes: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can like posts themselves
+      Read: "any", // Can see all likes
+      Update: "own", // Can only update their own likes
+      Delete: "moderate", // Can delete likes for moderation
     },
     comments: {
-      Create: "any",
-      Read: "any",
-      Update: "any",
-      Delete: "any",
+      Create: "own", // Can comment themselves
+      Read: "any", // Can read all comments
+      Update: "moderate", // Can moderate comments
+      Delete: "moderate", // Can delete comments
     },
     users: {
-      Read: "any",
-      Update: "any",
+      Read: "any", // Can view all users
+      Update: "moderate", // Can moderate users (limited)
+      Delete: "moderate", // Can deactivate users
     },
   },
   user: {
     posts: {
-      Create: "own",
+      Create: "own", // Users create their own posts
       Read: "conditional", // Published: any, Draft/Archived: own
-      Update: "own",
-      Delete: "own",
+      Update: "own", // Can only update their own posts
+      Delete: "own", // Can only delete their own posts
     },
     reposts: {
-      Create: "own",
+      Create: "own", // Can create their own reposts
       Read: "conditional", // Only published posts can be reposted
-      Update: "own",
-      Delete: "own",
+      Update: "own", // Can only update their own reposts
+      Delete: "own", // Can only delete their own reposts
     },
     interactions: {
       Create: "conditional", // Only on published posts
       Read: "conditional", // Can read all interactions on published posts, own interactions on archived posts
-      Update: "own",
-      Delete: "own",
+      Update: "own", // Can only update their own interactions
+      Delete: "own", // Can only delete their own interactions
     },
     likes: {
       Create: "conditional", // Only on published posts
       Read: "conditional", // Can read all likes on published posts, own likes on archived posts
-      Delete: "own",
+      Update: "own", // Can update their own likes
+      Delete: "own", // Can only delete their own likes
     },
     comments: {
       Create: "conditional", // Only on published posts
       Read: "conditional", // Can read all comments on published posts, own comments on archived posts
-      Update: "own",
-      Delete: "own",
+      Update: "own", // Can only update their own comments
+      Delete: "own", // Can only delete their own comments
     },
     users: {
       Read: "own", // Own profile only
-      Update: "own",
+      Update: "own", // Can only update their own profile
     },
   },
   unknown: {
@@ -141,7 +126,7 @@ const rolePermissions = {
     comments: {
       Read: "published_only",
     },
-    users: {},
+    users: {}, // No access to user profiles
   },
 };
 
@@ -175,7 +160,7 @@ const conditionalPermissions = {
   interactions: {
     Create: {
       user: (post, user) => {
-        // UPDATED: Users can only interact with published posts (not even their own drafts)
+        // Users can only interact with published posts
         return post.status === "published";
       },
     },
@@ -191,7 +176,7 @@ const conditionalPermissions = {
   likes: {
     Create: {
       user: (post, user) => {
-        // UPDATED: Users can only like published posts (not even their own drafts)
+        // Users can only like published posts
         return post.status === "published";
       },
     },
@@ -207,7 +192,7 @@ const conditionalPermissions = {
   comments: {
     Create: {
       user: (post, user) => {
-        // UPDATED: Users can only comment on published posts (not even their own drafts)
+        // Users can only comment on published posts
         return post.status === "published";
       },
     },
@@ -222,4 +207,77 @@ const conditionalPermissions = {
   },
 };
 
-module.exports = { permissions, rolePermissions, conditionalPermissions };
+// Moderation permissions - special logic for admin actions
+const moderationPermissions = {
+  posts: {
+    Update: {
+      admin: (post, user) => {
+        // Admin can moderate any post, but typically for policy violations
+        return true;
+      },
+    },
+    Delete: {
+      admin: (post, user) => {
+        // Admin can delete any post for moderation
+        return true;
+      },
+    },
+  },
+  interactions: {
+    Update: {
+      admin: (interaction, user) => {
+        // Admin can moderate any interaction
+        return true;
+      },
+    },
+    Delete: {
+      admin: (interaction, user) => {
+        // Admin can delete any interaction
+        return true;
+      },
+    },
+  },
+  comments: {
+    Update: {
+      admin: (comment, user) => {
+        // Admin can moderate comments
+        return true;
+      },
+    },
+    Delete: {
+      admin: (comment, user) => {
+        // Admin can delete comments
+        return true;
+      },
+    },
+  },
+  likes: {
+    Delete: {
+      admin: (like, user) => {
+        // Admin can delete likes (rare, but for spam control)
+        return true;
+      },
+    },
+  },
+  users: {
+    Update: {
+      admin: (targetUser, user) => {
+        // Admin can moderate users but not other admins/superadmins
+        return !["admin", "superadmin"].includes(targetUser.role);
+      },
+    },
+    Delete: {
+      admin: (targetUser, user) => {
+        // Admin can deactivate regular users
+        return targetUser.role === "user";
+      },
+    },
+  },
+};
+
+module.exports = {
+  permissions,
+  rolePermissions,
+  conditionalPermissions,
+  moderationPermissions,
+};

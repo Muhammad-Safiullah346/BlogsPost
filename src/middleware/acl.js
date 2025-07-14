@@ -1,6 +1,7 @@
 const {
   rolePermissions,
   conditionalPermissions,
+  moderationPermissions,
 } = require("./../config/permissions.js");
 
 const checkPermission = (resource, action) => {
@@ -23,7 +24,7 @@ const checkPermission = (resource, action) => {
       // Handle different permission levels
       switch (permissionLevel) {
         case "any":
-          // Full access, no restrictions
+          // Full access, no restrictions (mainly for superadmin)
           return next();
 
         case "own":
@@ -42,6 +43,15 @@ const checkPermission = (resource, action) => {
             resource,
             action,
             condition: conditionalPermissions[resource]?.[action]?.[userRole],
+          };
+          return next();
+
+        case "moderate":
+          // Handle moderation permissions
+          req.moderationPermission = {
+            resource,
+            action,
+            condition: moderationPermissions[resource]?.[action]?.[userRole],
           };
           return next();
 
@@ -135,6 +145,43 @@ const checkConditionalPermission = (model, ownerField = null) => {
   };
 };
 
+// New middleware for moderation permissions
+const checkModerationPermission = (model, ownerField = null) => {
+  return async (req, res, next) => {
+    try {
+      // Skip if no moderation permission required
+      if (!req.moderationPermission) {
+        return next();
+      }
+
+      const { condition } = req.moderationPermission;
+      const resourceId = req.params.id;
+
+      if (!resourceId) {
+        return res.status(400).json({ error: "Resource ID required" });
+      }
+
+      const resource = await model.findById(resourceId);
+      if (!resource) {
+        return res.status(404).json({ error: "Resource not found" });
+      }
+
+      // Check if user can moderate this resource
+      if (condition && !condition(resource, req.user)) {
+        return res.status(403).json({ error: "Moderation access denied" });
+      }
+
+      // Store resource in request for use in controller
+      req.resource = resource;
+      next();
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "Moderation permission check failed" });
+    }
+  };
+};
+
 // Enhanced function to check interaction permissions for specific posts
 const checkInteractionPermission = (action) => {
   return async (req, res, next) => {
@@ -150,13 +197,37 @@ const checkInteractionPermission = (action) => {
       }
 
       // Check based on user role and post status
-      if (userRole === "superadmin" || userRole === "admin") {
-        // Superadmin and admin can perform any action
+      if (userRole === "superadmin") {
+        // Superadmin can perform any action but interactions are still personal
+        if (action === "Create" && post.status === "draft") {
+          return res.status(403).json({
+            error:
+              "Cannot interact with draft posts. Please publish the post first.",
+          });
+        }
         req.post = post;
         return next();
       }
 
-      // NEW LOGIC: Draft posts cannot be interacted with by anyone (including author)
+      if (userRole === "admin") {
+        // Admin can read all interactions but create/update/delete are personal or moderation
+        if (action === "Read") {
+          req.post = post;
+          return next();
+        }
+
+        if (action === "Create" && post.status === "draft") {
+          return res.status(403).json({
+            error:
+              "Cannot interact with draft posts. Please publish the post first.",
+          });
+        }
+
+        req.post = post;
+        return next();
+      }
+
+      // Draft posts cannot be interacted with by anyone (including author)
       if (post.status === "draft") {
         return res.status(403).json({
           error:
@@ -228,6 +299,7 @@ module.exports = {
   checkPermission,
   checkOwnership,
   checkConditionalPermission,
+  checkModerationPermission,
   checkInteractionPermission,
   applyConditionalFilter,
 };

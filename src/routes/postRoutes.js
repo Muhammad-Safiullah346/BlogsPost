@@ -5,6 +5,7 @@ const {
   checkPermission,
   checkOwnership,
   checkConditionalPermission,
+  checkModerationPermission,
 } = require("./../middleware/acl.js");
 const { validatePost } = require("./../middleware/validation.js");
 const {
@@ -38,12 +39,16 @@ router.post(
   createPost
 );
 
+// Updated routes with moderation support
 router.put(
   "/:id",
   auth,
   requireAuth,
   checkPermission("posts", "Update"),
+  // First check ownership (for own posts)
   checkOwnership(Post, "author"),
+  // Then check moderation permissions (for admin/superadmin)
+  checkModerationPermission(Post, "author"),
   validatePost,
   updatePost
 );
@@ -53,7 +58,10 @@ router.delete(
   auth,
   requireAuth,
   checkPermission("posts", "Delete"),
+  // First check ownership (for own posts)
   checkOwnership(Post, "author"),
+  // Then check moderation permissions (for admin/superadmin)
+  checkModerationPermission(Post, "author"),
   deletePost
 );
 
