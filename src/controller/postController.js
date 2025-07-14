@@ -180,32 +180,24 @@ const createRepost = async (req, res) => {
       return res.status(404).json({ error: "Original post not found" });
     }
 
-    // UPDATED: Enhanced draft post restrictions
-    if (originalPost.status === "draft") {
+    // UPDATED: Users can only repost published posts (whether their own or others')
+    if (originalPost.status !== "published") {
       return res.status(403).json({
-        error: "Cannot repost draft content. Please publish the post first.",
+        error: "Can only repost published posts",
       });
     }
 
-    // Check if user can repost based on original post status
-    if (originalPost.status === "archived") {
-      // Only the author, admin, and superadmin can repost archived posts
-      if (
-        req.userRole === "user" &&
-        originalPost.author.toString() !== req.user._id.toString()
-      ) {
-        return res.status(403).json({
-          error: "Cannot repost archived content that is not yours",
-        });
-      }
-    }
-
-    // Regular users can only repost published content
-    if (req.userRole === "user" && originalPost.status !== "published") {
-      return res.status(403).json({
-        error: "Can only repost published content",
+    // Additional check: Prevent reposting your own repost
+    if (
+      originalPost.isRepost &&
+      originalPost.author.toString() === req.user._id.toString()
+    ) {
+      return res.status(400).json({
+        error: "Cannot repost your own repost",
       });
     }
+
+    // Note: Users can repost the same post multiple times if desired
 
     const repost = new Post({
       title: `Repost: ${originalPost.title}`,
