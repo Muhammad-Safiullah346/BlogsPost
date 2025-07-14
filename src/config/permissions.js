@@ -1,39 +1,28 @@
 const rolePermissions = {
   superadmin: {
     posts: {
-      Create: "own", // Superadmin can create their own posts
       Read: "any", // Can read all posts for moderation
-      Update: "any", // Can moderate/edit any post
       Delete: "any", // Can delete any post for moderation
     },
     reposts: {
-      Create: "own", // Can create their own reposts
       Read: "any", // Can read all reposts
-      Update: "any", // Can moderate reposts
       Delete: "any", // Can delete any repost
     },
     interactions: {
-      Create: "own", // Can create their own interactions
       Read: "any", // Can read all interactions for moderation
-      Update: "any", // Can moderate interactions
       Delete: "any", // Can delete any interaction
     },
     likes: {
-      Create: "own", // Can like posts themselves
       Read: "any", // Can see all likes
-      Update: "own", // Can only update their own likes
       Delete: "any", // Can delete any like for moderation
     },
     comments: {
-      Create: "own", // Can comment themselves
       Read: "any", // Can read all comments
-      Update: "any", // Can moderate comments
       Delete: "any", // Can delete any comment
     },
     users: {
       Create: "any", // Can create user accounts
       Read: "any", // Can view all users
-      Update: "any", // Can modify user accounts
       Delete: "any", // Can delete/deactivate users
     },
   },
@@ -41,19 +30,19 @@ const rolePermissions = {
     posts: {
       Create: "own", // Admin can create their own posts
       Read: "any", // Can read all posts for moderation
-      Update: "moderate", // Can moderate posts (special permission)
+      Update: "own", // Can moderate posts (special permission)
       Delete: "moderate", // Can delete posts for moderation
     },
     reposts: {
       Create: "own", // Can create their own reposts
       Read: "any", // Can read all reposts
-      Update: "moderate", // Can moderate reposts
+      Update: "own", // Can moderate reposts
       Delete: "moderate", // Can delete reposts
     },
     interactions: {
       Create: "own", // Can create their own interactions
       Read: "any", // Can read all interactions
-      Update: "moderate", // Can moderate interactions
+      Update: "own", // Can moderate interactions
       Delete: "moderate", // Can delete interactions
     },
     likes: {
@@ -65,12 +54,11 @@ const rolePermissions = {
     comments: {
       Create: "own", // Can comment themselves
       Read: "any", // Can read all comments
-      Update: "moderate", // Can moderate comments
+      Update: "own", // Can moderate comments
       Delete: "moderate", // Can delete comments
     },
     users: {
       Read: "any", // Can view all users
-      Update: "moderate", // Can moderate users (limited)
       Delete: "moderate", // Can deactivate users
     },
   },
