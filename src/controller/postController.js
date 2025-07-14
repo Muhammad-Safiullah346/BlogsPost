@@ -1,5 +1,6 @@
 const Post = require("./../models/Post.js");
 const Interaction = require("./../models/Interaction.js");
+const { applyConditionalFilter } = require("./../middleware/acl.js");
 
 const createPost = async (req, res) => {
   try {
@@ -31,21 +32,27 @@ const getPosts = async (req, res) => {
   try {
     const { page = 1, limit = 10, status, author, tag } = req.query;
 
-    const query = {};
+    let query = {};
 
-    // Filter by status (unknown users can only see published posts)
-    if (req.userRole === "unknown") {
-      query.status = "published";
-    } else if (status) {
+    // Apply conditional filters based on user role and permissions
+    query = applyConditionalFilter(query, req);
+
+    // Apply additional filters
+    if (status && !req.publishedOnly) {
+      // Only allow status filtering if not restricted to published only
+      if (req.userRole === "user") {
+        // Users can only filter their own non-published posts
+        if (status !== "published") {
+          query.author = req.user._id;
+        }
+      }
       query.status = status;
     }
 
-    // Filter by author
     if (author) {
       query.author = author;
     }
 
-    // Filter by tag
     if (tag) {
       query.tags = { $in: [tag] };
     }
@@ -75,19 +82,23 @@ const getPosts = async (req, res) => {
 
 const getPost = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const post = await Post.findById(id)
-      .populate("author", "username profile")
-      .populate("originalPost", "title author");
+    // If resource is already loaded by middleware, use it
+    let post = req.resource;
 
     if (!post) {
-      return res.status(404).json({ error: "Post not found" });
+      const { id } = req.params;
+      post = await Post.findById(id)
+        .populate("author", "username profile")
+        .populate("originalPost", "title author");
+
+      if (!post) {
+        return res.status(404).json({ error: "Post not found" });
+      }
     }
 
-    // Check if unknown user can access this post
-    if (req.userRole === "unknown" && post.status !== "published") {
-      return res.status(403).json({ error: "Access denied" });
+    // Additional population if needed
+    if (!post.author.username) {
+      await post.populate("author", "username profile");
     }
 
     res.json({ post });
@@ -101,11 +112,28 @@ const updatePost = async (req, res) => {
     const { id } = req.params;
     const { title, content, tags, featuredImage, excerpt, status } = req.body;
 
-    const post = await Post.findByIdAndUpdate(
-      id,
-      { title, content, tags, featuredImage, excerpt, status },
-      { new: true }
-    ).populate("author", "username profile");
+    // Use resource from middleware if available
+    let post = req.resource;
+
+    if (!post) {
+      post = await Post.findByIdAndUpdate(
+        id,
+        { title, content, tags, featuredImage, excerpt, status },
+        { new: true }
+      ).populate("author", "username profile");
+    } else {
+      // Update the existing resource
+      Object.assign(post, {
+        title,
+        content,
+        tags,
+        featuredImage,
+        excerpt,
+        status,
+      });
+      await post.save();
+      await post.populate("author", "username profile");
+    }
 
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
@@ -121,7 +149,15 @@ const deletePost = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const post = await Post.findByIdAndDelete(id);
+    // Use resource from middleware if available
+    let post = req.resource;
+
+    if (!post) {
+      post = await Post.findByIdAndDelete(id);
+    } else {
+      await Post.findByIdAndDelete(id);
+    }
+
     if (!post) {
       return res.status(404).json({ error: "Post not found" });
     }
@@ -142,6 +178,17 @@ const createRepost = async (req, res) => {
     const originalPost = await Post.findById(originalPostId);
     if (!originalPost) {
       return res.status(404).json({ error: "Original post not found" });
+    }
+
+    // Check if user can access the original post
+    if (
+      originalPost.status !== "published" &&
+      originalPost.author.toString() !== req.user._id.toString() &&
+      req.userRole === "user"
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Cannot repost inaccessible content" });
     }
 
     const repost = new Post({

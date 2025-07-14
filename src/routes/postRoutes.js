@@ -1,7 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { auth, requireAuth } = require("./../middleware/auth.js");
-const { checkPermission, checkOwnership } = require("./../middleware/acl.js");
+const {
+  checkPermission,
+  checkOwnership,
+  checkConditionalPermission,
+} = require("./../middleware/acl.js");
 const { validatePost } = require("./../middleware/validation.js");
 const {
   createPost,
@@ -13,9 +17,16 @@ const {
 } = require("./../controller/postController.js");
 const Post = require("./../models/Post.js");
 
-// Public routes (accessible to unknown users)
+// Public routes (accessible to unknown users with restrictions)
 router.get("/", auth, checkPermission("posts", "Read"), getPosts);
-router.get("/:id", auth, checkPermission("posts", "Read"), getPost);
+
+router.get(
+  "/:id",
+  auth,
+  checkPermission("posts", "Read"),
+  checkConditionalPermission(Post),
+  getPost
+);
 
 // Protected routes (require authentication)
 router.post(
@@ -26,21 +37,23 @@ router.post(
   validatePost,
   createPost
 );
+
 router.put(
   "/:id",
   auth,
   requireAuth,
   checkPermission("posts", "Update"),
-  checkOwnership(Post),
+  checkOwnership(Post, "author"),
   validatePost,
   updatePost
 );
+
 router.delete(
   "/:id",
   auth,
   requireAuth,
   checkPermission("posts", "Delete"),
-  checkOwnership(Post),
+  checkOwnership(Post, "author"),
   deletePost
 );
 
