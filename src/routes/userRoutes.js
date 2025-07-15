@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { auth, requireUser } = require("./../middleware/auth.js");
+const { checkPermission } = require("./../middleware/permissions.js");
 const {
   getProfile,
   updateProfile,
@@ -16,8 +17,18 @@ router.use(auth, requireUser);
 router.get("/profile", getProfile);
 router.put("/profile", updateProfile);
 
-// Account management
-router.post("/deactivate", deactivateAccount);
-router.delete("/delete", validateAccountDeletion, deleteAccount);
+// Account management - now using permission system
+router.post(
+  "/account/deactivate",
+  checkPermission("users", "Deactivate"),
+  deactivateAccount
+);
+
+router.delete(
+  "/account/delete",
+  validateAccountDeletion,
+  checkPermission("users", "Delete"),
+  deleteAccount
+);
 
 module.exports = router;

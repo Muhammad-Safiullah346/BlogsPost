@@ -177,13 +177,19 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// Updated to work with permission system
 const deactivateAccount = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const user = await User.findById(userId);
+    // Get target user ID from request (could be req.user._id for own account or req.params.userId for admin actions)
+    const targetUserId = req.params.userId || req.user._id;
+    const targetUser = await User.findById(targetUserId);
+
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
     // Store previous status of posts before archiving them
-    const userPosts = await Post.find({ author: userId });
+    const userPosts = await Post.find({ author: targetUserId });
 
     // Archive all user's posts and store their previous status
     for (const post of userPosts) {
@@ -197,45 +203,56 @@ const deactivateAccount = async (req, res) => {
     }
 
     // Deactivate user account
-    await user.deactivate();
+    await targetUser.deactivate();
 
-    await Interaction.updateMany({ user: userId }, { isActive: false });
+    // Deactivate user's interactions
+    await Interaction.updateMany({ user: targetUserId }, { isActive: false });
 
-    res.json({
-      message:
-        "Account deactivated successfully. You can reactivate it anytime by logging in with your credentials.",
-    });
+    const message =
+      targetUserId === req.user._id.toString()
+        ? "Account deactivated successfully. You can reactivate it anytime by logging in with your credentials."
+        : `User ${targetUser.username} has been deactivated successfully.`;
+
+    res.json({ message });
   } catch (error) {
     console.error("Deactivation error:", error);
     res.status(500).json({ error: "Failed to deactivate account" });
   }
 };
 
+// Updated to work with permission system
 const deleteAccount = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { password, confirmDelete } = req.body;
+    // Get target user ID from request (could be req.user._id for own account or req.params.userId for admin actions)
+    const targetUserId = req.params.userId || req.user._id;
+    const targetUser = await User.findById(targetUserId);
 
-    // Verify password for security
-    const user = await User.findById(userId);
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Invalid password" });
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    // Require explicit confirmation
-    if (confirmDelete !== "DELETE_MY_ACCOUNT") {
-      return res.status(400).json({
-        error:
-          "Please confirm deletion by sending confirmDelete: 'DELETE_MY_ACCOUNT'",
-      });
+    // For own account deletion, verify password
+    if (targetUserId === req.user._id.toString()) {
+      const { password, confirmDelete } = req.body;
+
+      const isMatch = await targetUser.comparePassword(password);
+      if (!isMatch) {
+        return res.status(401).json({ error: "Invalid password" });
+      }
+
+      if (confirmDelete !== "DELETE_MY_ACCOUNT") {
+        return res.status(400).json({
+          error:
+            "Please confirm deletion by sending confirmDelete: 'DELETE_MY_ACCOUNT'",
+        });
+      }
     }
 
     // Delete user's interactions
-    await Interaction.deleteMany({ user: userId });
+    await Interaction.deleteMany({ user: targetUserId });
 
     // Get user's posts before deletion to handle reposts
-    const userPosts = await Post.find({ author: userId });
+    const userPosts = await Post.find({ author: targetUserId });
     const userPostIds = userPosts.map((post) => post._id);
 
     // Delete reposts that reference user's posts
@@ -258,14 +275,17 @@ const deleteAccount = async (req, res) => {
     }
 
     // Delete user's posts
-    await Post.deleteMany({ author: userId });
+    await Post.deleteMany({ author: targetUserId });
 
     // Delete the user account
-    await User.findByIdAndDelete(userId);
+    await User.findByIdAndDelete(targetUserId);
 
-    res.json({
-      message: "Account and all associated data deleted successfully",
-    });
+    const message =
+      targetUserId === req.user._id.toString()
+        ? "Account and all associated data deleted successfully"
+        : `User ${targetUser.username} and all associated data deleted successfully`;
+
+    res.json({ message });
   } catch (error) {
     console.error("Account deletion error:", error);
     res.status(500).json({ error: "Failed to delete account" });
