@@ -48,17 +48,17 @@ const rolePermissions = {
     likes: {
       Create: "own", // Can like posts themselves
       Read: "any", // Can see all likes
-      Update: "own", // Can only update their own likes
-      Delete: "moderate", // Can delete likes for moderation
+      Delete: "own", // Can delete likes for moderation
     },
     comments: {
       Create: "own", // Can comment themselves
       Read: "any", // Can read all comments
       Update: "own", // Can moderate comments
-      Delete: "moderate", // Can delete comments
+      Delete: "own", // Can delete comments
     },
     users: {
       Read: "any", // Can view all users
+      update: "own", // Can update their own profile
       Delete: "moderate", // Can deactivate users
     },
   },
@@ -84,14 +84,13 @@ const rolePermissions = {
     likes: {
       Create: "conditional", // Only on published posts
       Read: "conditional", // Can read all likes on published posts, own likes on archived posts
-      Update: "own", // Can update their own likes
       Delete: "own", // Can only delete their own likes
     },
     comments: {
       Create: "conditional", // Only on published posts
       Read: "conditional", // Can read all comments on published posts, own comments on archived posts
       Update: "own", // Can only update their own comments
-      Delete: "own", // Can only delete their own comments
+      Delete: "moderate", // Can delete their own comments + comments on their posts
     },
     users: {
       Read: "own", // Own profile only
@@ -206,8 +205,22 @@ const moderationPermissions = {
     },
     Delete: {
       admin: (post, user) => {
-        // Admin can delete any post for moderation
-        return true;
+        // Admin can delete their own posts and regular users' posts
+        // But not other admins' or superadmins' posts
+
+        // Check if it's their own post
+        const authorId = post.author._id || post.author;
+        if (authorId.toString() === user._id.toString()) {
+          return true; // Can delete own posts
+        }
+
+        // Check author role if populated
+        if (post.author.role) {
+          return post.author.role === "user"; // Can only delete regular users' posts
+        }
+
+        // If author role not populated, deny access for safety
+        return false;
       },
     },
   },
@@ -233,9 +246,40 @@ const moderationPermissions = {
       },
     },
     Delete: {
+      user: (comment, user) => {
+        // User can delete their own comments OR comments on their own posts
+
+        // Check if it's their own comment
+        const commentUserId = comment.user._id || comment.user;
+        if (commentUserId.toString() === user._id.toString()) {
+          return true; // Can delete own comments
+        }
+
+        // Check if it's a comment on their own post
+        if (comment.post && comment.post.author) {
+          const postAuthorId = comment.post.author._id || comment.post.author;
+          return postAuthorId.toString() === user._id.toString();
+        }
+
+        return false;
+      },
       admin: (comment, user) => {
-        // Admin can delete comments
-        return true;
+        // Admin can delete their own comments OR comments on their own posts
+        // (same logic as users - admins don't get special comment moderation privileges)
+
+        // Check if it's their own comment
+        const commentUserId = comment.user._id || comment.user;
+        if (commentUserId.toString() === user._id.toString()) {
+          return true; // Can delete own comments
+        }
+
+        // Check if it's a comment on their own post
+        if (comment.post && comment.post.author) {
+          const postAuthorId = comment.post.author._id || comment.post.author;
+          return postAuthorId.toString() === user._id.toString();
+        }
+
+        return false;
       },
     },
   },

@@ -165,7 +165,22 @@ const deletePost = async (req, res) => {
     // Delete associated interactions
     await Interaction.deleteMany({ post: id });
 
-    res.json({ message: "Post deleted successfully" });
+    // Handle reposts of this post
+    const reposts = await Post.find({ originalPost: id, isRepost: true });
+
+    if (reposts.length > 0) {
+      // Option 1: Delete all reposts (cascade delete)
+      await Post.deleteMany({ originalPost: id, isRepost: true });
+
+      // Also delete interactions on those reposts
+      const repostIds = reposts.map((repost) => repost._id);
+      await Interaction.deleteMany({ post: { $in: repostIds } });
+    }
+
+    res.json({
+      message: "Post deleted successfully",
+      repostsDeleted: reposts.length,
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete post" });
   }

@@ -79,7 +79,17 @@ const checkOwnership = (model, ownerField = null) => {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      const resource = await model.findById(resourceId);
+      // For posts, populate author to get role information if needed
+      const query = model.findById(resourceId);
+      if (model.modelName === "Post" && ownerField === "author") {
+        query.populate("author", "role username");
+      }
+      // For interactions (comments), populate user and post.author for moderation
+      if (model.modelName === "Interaction") {
+        query.populate("user", "role username").populate("post", "author");
+      }
+
+      const resource = await query;
       if (!resource) {
         return res.status(404).json({ error: "Resource not found" });
       }
@@ -161,7 +171,17 @@ const checkModerationPermission = (model, ownerField = null) => {
         return res.status(400).json({ error: "Resource ID required" });
       }
 
-      const resource = await model.findById(resourceId);
+      // For posts, populate author to get role information for permission checks
+      const query = model.findById(resourceId);
+      if (model.modelName === "Post" && ownerField === "author") {
+        query.populate("author", "role username");
+      }
+      // For interactions (comments), populate user and post.author for moderation
+      if (model.modelName === "Interaction") {
+        query.populate("user", "role username").populate("post", "author");
+      }
+
+      const resource = await query;
       if (!resource) {
         return res.status(404).json({ error: "Resource not found" });
       }

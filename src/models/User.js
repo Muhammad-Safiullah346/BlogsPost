@@ -38,6 +38,13 @@ const userSchema = new mongoose.Schema(
       bio: String,
       avatar: String,
     },
+    lastDeactivated: {
+      type: Date,
+    },
+    deactivationCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -54,6 +61,20 @@ userSchema.pre("save", async function (next) {
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Track deactivation
+userSchema.methods.deactivate = function () {
+  this.isActive = false;
+  this.lastDeactivated = new Date();
+  this.deactivationCount += 1;
+  return this.save();
+};
+
+// Track reactivation
+userSchema.methods.reactivate = function () {
+  this.isActive = true;
+  return this.save();
 };
 
 module.exports = mongoose.model("User", userSchema);

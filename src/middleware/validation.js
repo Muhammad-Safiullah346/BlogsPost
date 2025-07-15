@@ -29,6 +29,19 @@ const validateLogin = (req, res, next) => {
   next();
 };
 
+const validateAccountDeletion = (req, res, next) => {
+  const schema = Joi.object({
+    password: Joi.string().required(),
+    confirmDelete: Joi.string().valid("DELETE_MY_ACCOUNT").required(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
 const validatePost = (req, res, next) => {
   const schema = Joi.object({
     title: Joi.string().max(200).required(),
@@ -67,6 +80,7 @@ const validateInteraction = (req, res, next) => {
 module.exports = {
   validateRegistration,
   validateLogin,
+  validateAccountDeletion,
   validatePost,
   validateInteraction,
 };

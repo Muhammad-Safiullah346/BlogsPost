@@ -56,6 +56,16 @@ const postSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // New field to track if post was archived due to account deactivation
+    archivedByDeactivation: {
+      type: Boolean,
+      default: false,
+    },
+    // Track previous status before deactivation
+    previousStatus: {
+      type: String,
+      enum: ["draft", "published", "archived"],
+    },
   },
   {
     timestamps: true,
