@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { auth, requireAuth } = require("./../middleware/auth.js");
+const { auth, requireAuth, requireUser } = require("./../middleware/auth.js");
 const {
   checkPermission,
   checkOwnership,
@@ -29,11 +29,11 @@ router.get(
   getPost
 );
 
-// Protected routes (require authentication)
+// Protected routes (require user authentication)
 router.post(
   "/",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("posts", "Create"),
   validatePost,
   createPost
@@ -43,7 +43,7 @@ router.post(
 router.put(
   "/:id",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("posts", "Update"),
   // First check ownership (for own posts)
   checkOwnership(Post, "author"),
@@ -56,7 +56,7 @@ router.put(
 router.delete(
   "/:id",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("posts", "Delete"),
   // First check ownership (for own posts)
   checkOwnership(Post, "author"),
@@ -69,7 +69,7 @@ router.delete(
 router.post(
   "/repost",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("reposts", "Create"),
   createRepost
 );

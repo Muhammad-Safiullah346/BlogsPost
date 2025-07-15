@@ -308,7 +308,6 @@ const moderationPermissions = {
 };
 
 module.exports = {
-  permissions,
   rolePermissions,
   conditionalPermissions,
   moderationPermissions,

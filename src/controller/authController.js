@@ -3,8 +3,12 @@ const Post = require("./../models/Post.js");
 const Interaction = require("./../models/Interaction.js");
 const jwt = require("jsonwebtoken");
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET || "your-secret-key", {
+const generateToken = (userId, role = null) => {
+  const payload = { id: userId };
+  if (role) {
+    payload.role = role;
+  }
+  return jwt.sign(payload, process.env.JWT_SECRET || "your-secret-key", {
     expiresIn: process.env.JWT_EXPIRES_IN || "7d",
   });
 };
@@ -59,6 +63,24 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    // Check if it's superadmin login
+    if (
+      email === process.env.SUPERADMIN_EMAIL &&
+      password === process.env.SUPERADMIN_PASSWORD
+    ) {
+      const token = generateToken("superadmin", "superadmin");
+      return res.json({
+        message: "Superadmin login successful",
+        token,
+        user: {
+          id: "superadmin",
+          email: process.env.SUPERADMIN_EMAIL,
+          role: "superadmin",
+          username: "superadmin",
+        },
+      });
+    }
 
     // Find user (including deactivated ones)
     const user = await User.findOne({ email });
@@ -250,10 +272,106 @@ const deleteAccount = async (req, res) => {
   }
 };
 
+// Admin management functions (only for superadmin)
+const promoteToAdmin = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.role === "admin") {
+      return res.status(400).json({ error: "User is already an admin" });
+    }
+
+    user.role = "admin";
+    await user.save();
+
+    res.json({
+      message: "User promoted to admin successfully",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Promote to admin error:", error);
+    res.status(500).json({ error: "Failed to promote user to admin" });
+  }
+};
+
+const demoteToUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.role === "user") {
+      return res.status(400).json({ error: "User is already a regular user" });
+    }
+
+    user.role = "user";
+    await user.save();
+
+    res.json({
+      message: "Admin demoted to user successfully",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Demote to user error:", error);
+    res.status(500).json({ error: "Failed to demote admin to user" });
+  }
+};
+
+const getAllUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, role } = req.query;
+    const query = {};
+
+    if (role && ["admin", "user"].includes(role)) {
+      query.role = role;
+    }
+
+    const users = await User.find(query)
+      .select("-password")
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .sort({ createdAt: -1 });
+
+    const total = await User.countDocuments(query);
+
+    res.json({
+      users,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+      total,
+    });
+  } catch (error) {
+    console.error("Get all users error:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+};
+
 module.exports = {
   register,
   login,
   getProfile,
   updateProfile,
+  deactivateAccount,
   deleteAccount,
+  promoteToAdmin,
+  demoteToUser,
+  getAllUsers,
 };

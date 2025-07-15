@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { auth, requireAuth } = require("./../middleware/auth.js");
+const { auth, requireAuth, requireUser } = require("./../middleware/auth.js");
 const {
   checkPermission,
   checkOwnership,
@@ -24,11 +24,11 @@ router.get(
   getInteractions
 );
 
-// Protected routes - require authentication
+// Protected routes - require user authentication
 router.post(
   "/post/:postId",
   auth,
-  requireAuth,
+  requireUser,
   checkInteractionPermission("Create"),
   validateInteraction,
   createInteraction
@@ -38,7 +38,7 @@ router.post(
 router.put(
   "/:id",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("interactions", "Update"),
   // First check ownership (for own interactions)
   checkOwnership(Interaction),
@@ -50,7 +50,7 @@ router.put(
 router.delete(
   "/:id",
   auth,
-  requireAuth,
+  requireUser,
   checkPermission("interactions", "Delete"),
   // First check ownership (for own interactions)
   checkOwnership(Interaction),

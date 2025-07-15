@@ -6,6 +6,9 @@ require("dotenv").config();
 require("./config/dbConnect.js");
 
 const authRoutes = require("./routes/authRoutes.js");
+const userRoutes = require("./routes/userRoutes.js");
+const adminRoutes = require("./routes/adminRoutes.js");
+const superadminRoutes = require("./routes/superadminRoutes.js");
 const postRoutes = require("./routes/postRoutes.js");
 const interactionRoutes = require("./routes/interactionRoutes.js");
 const errorHandler = require("./middleware/errorHandler.js");
@@ -29,6 +32,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/user", userRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/superadmin", superadminRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/interactions", interactionRoutes);
 
