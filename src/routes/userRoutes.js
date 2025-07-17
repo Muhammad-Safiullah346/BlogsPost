@@ -88,10 +88,6 @@ router.route("/posts/:id").get(
 // Repost - more RESTful route
 router.post(
   "/posts/:id/repost",
-  (req, res, next) => {
-    req.ownerView = false;
-    next();
-  },
   checkPermission("reposts", "Create"),
   checkConditionalPermission(Post),
   validateRepost,
@@ -111,14 +107,38 @@ router
     getInteractions
   )
   .post(
-    (req, res, next) => {
-      req.ownerView = false;
-      next();
-    },
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
     validateInteraction,
     createInteraction
+  );
+
+// Individual interaction management on posts
+router
+  .route("/posts/:id/interactions/:interactionId")
+  .put(
+    (req, res, next) => {
+      req.ownerView = false;
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkPermission("interactions", "Update"),
+    checkConditionalPermission(Post),
+    checkOwnership(Interaction, "user"),
+    validateInteraction,
+    updateInteraction
+  )
+  .delete(
+    (req, res, next) => {
+      req.ownerView = false;
+      // Set the interaction ID as the main resource ID for ownership check
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkPermission("interactions", "Delete"),
+    checkConditionalPermission(Post),
+    checkOwnership(Interaction, "user"),
+    deleteInteraction
   );
 
 // Comment-specific interactions
@@ -134,10 +154,6 @@ router
     getInteractions
   )
   .post(
-    (req, res, next) => {
-      req.ownerView = false;
-      next();
-    },
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
     validateInteraction,
@@ -145,14 +161,41 @@ router
   );
 
 router
+  .route("/posts/:id/comments/:commentId/interactions/:interactionId")
+  .put(
+    (req, res, next) => {
+      req.ownerView = false;
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkPermission("interactions", "Update"),
+    checkConditionalPermission(Post),
+    checkOwnership(Interaction, "user"),
+    validateInteraction,
+    updateInteraction
+  )
+  .delete(
+    (req, res, next) => {
+      req.ownerView = false;
+      // Set the interaction ID as the main resource ID for ownership check
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkPermission("interactions", "Delete"),
+    checkConditionalPermission(Post),
+    checkOwnership(Interaction, "user"),
+    deleteInteraction
+  );
+
+router
   .route("/me/posts")
   .get(
     (req, res, next) => {
-      req.ownerView = false;
+      req.ownerView = true;
       next();
     },
     checkPermission("posts", "Read"),
-    getMyPosts(req, res)
+    getMyPosts
   ) // List my posts
   .post(checkPermission("posts", "Create"), validatePost, createPost); // Create new post
 
@@ -179,21 +222,6 @@ router
     checkOwnership(Post, "author"),
     deletePost
   );
-
-// Get drafts using the   regular posts route with draft filter
-router.get(
-  "/me/posts/drafts",
-  checkPermission("posts", "Read"),
-  async (req, res, next) => {
-    // Find all draft posts for the current user
-    req.posts = await Post.find({
-      author: req.user._id,
-      status: "draft",
-    });
-    next();
-  },
-  getPost
-);
 
 // Personal interaction history and management
 router.get(

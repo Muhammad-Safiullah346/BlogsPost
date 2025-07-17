@@ -41,14 +41,36 @@ const createInteraction = async (req, res) => {
       });
 
       if (existingLike) {
-        return res.status(400).json({
-          error: req.params.commentId
-            ? "You already liked this comment"
-            : "You already liked this post",
+        // Remove the existing like (toggle off)
+        await Interaction.findByIdAndUpdate(existingLike._id, {
+          isActive: false,
+        });
+
+        // Update post counters (only for direct post interactions)
+        if (!req.params.commentId) {
+          await Post.findByIdAndUpdate(postId, {
+            $inc: { likesCount: -1 },
+          });
+        }
+
+        // If this was a like on a comment, update comment's like count
+        if (req.params.commentId) {
+          await Interaction.findByIdAndUpdate(req.params.commentId, {
+            $inc: { likesCount: -1 },
+          });
+        }
+
+        return res.status(200).json({
+          message: req.params.commentId
+            ? "Comment like removed successfully"
+            : "Post like removed successfully",
+          action: "removed",
+          likeId: existingLike._id,
         });
       }
     }
 
+    // Create new interaction (like or comment)
     const interaction = new Interaction({
       user: req.user._id,
       post: postId,
@@ -86,6 +108,7 @@ const createInteraction = async (req, res) => {
 
     res.status(201).json({
       message: `${type} created successfully`,
+      action: "created",
       interaction,
     });
   } catch (error) {
