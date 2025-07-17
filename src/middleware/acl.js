@@ -67,7 +67,6 @@ const checkPermission = (resource, action) => {
 const checkOwnership = (model, ownerField = null) => {
   return async (req, res, next) => {
     try {
-      // Skip ownership check if not required
       if (!req.requireOwnership) {
         return next();
       }
@@ -79,14 +78,10 @@ const checkOwnership = (model, ownerField = null) => {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      // For posts, populate author to get role information if needed
+      // Optimized query with select to minimize data transfer
       const query = model.findById(resourceId);
       if (model.modelName === "Post" && ownerField === "author") {
-        query.populate("author", "role username");
-      }
-      // For interactions (comments), populate user and post.author for moderation
-      if (model.modelName === "Interaction") {
-        query.populate("user", "role username").populate("post", "author");
+        query.populate("author", "role username profile"); // Include profile for controller use
       }
 
       const resource = await query;
@@ -94,7 +89,7 @@ const checkOwnership = (model, ownerField = null) => {
         return res.status(404).json({ error: "Resource not found" });
       }
 
-      // Determine owner field (author, user, or custom field)
+      // Determine owner field
       const ownerFieldName =
         ownerField || (resource.author ? "author" : "user");
       const ownerId = resource[ownerFieldName];
@@ -105,7 +100,7 @@ const checkOwnership = (model, ownerField = null) => {
         });
       }
 
-      // Store resource in request for use in controller
+      // Store resource in request for controller use
       req.resource = resource;
       next();
     } catch (error) {

@@ -108,20 +108,35 @@ const getPost = async (req, res) => {
 
 const updatePost = async (req, res) => {
   try {
-    const { id } = req.params;
     const { title, content, tags, featuredImage, excerpt, status } = req.body;
 
-    let post = await Post.findOneAndUpdate(
-      { _id: id, author: req.user._id },
-      { title, content, tags, featuredImage, excerpt, status },
-      { new: true }
-    ).populate("author", "username profile");
+    // Use the post already loaded by checkOwnership middleware
+    const post = req.resource;
 
     if (!post) {
-      return res.status(404).json({ error: "Post not found or unauthorized" });
+      return res.status(404).json({ error: "Post not found" });
     }
 
-    res.json({ message: "Post updated successfully", post });
+    // Update the post fields
+    if (title !== undefined) post.title = title;
+    if (content !== undefined) post.content = content;
+    if (tags !== undefined) post.tags = tags;
+    if (featuredImage !== undefined) post.featuredImage = featuredImage;
+    if (excerpt !== undefined) post.excerpt = excerpt;
+    if (status !== undefined) post.status = status;
+
+    // Save the updated post
+    await post.save();
+
+    // Populate author info if not already populated
+    if (!post.author.username) {
+      await post.populate("author", "username profile");
+    }
+
+    res.json({
+      message: "Post updated successfully",
+      post,
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to update post" });
   }
@@ -131,15 +146,18 @@ const deletePost = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Optimized: Check ownership and get repost IDs in parallel
-    const [originalPost, repostIds] = await Promise.all([
-      Post.findOne({ _id: id, author: req.user._id }),
-      Post.find({ originalPost: id, isRepost: true }).distinct("_id"),
-    ]);
+    // Use the post already loaded by checkOwnership middleware
+    const originalPost = req.resource;
 
     if (!originalPost) {
-      return res.status(404).json({ error: "Post not found or unauthorized" });
+      return res.status(404).json({ error: "Post not found" });
     }
+
+    // Get repost IDs for this post
+    const repostIds = await Post.find({
+      originalPost: id,
+      isRepost: true,
+    }).distinct("_id");
 
     // Check if the post being deleted is a repost
     if (originalPost.isRepost && originalPost.originalPost) {
@@ -156,7 +174,10 @@ const deletePost = async (req, res) => {
     const [, repostDeleteResult] = await Promise.all([
       Post.deleteOne({ _id: id }),
       Post.deleteMany({ originalPost: id, isRepost: true }),
-      Interaction.deleteMany({ post: { $in: allPostIds } }),
+      // Import Interaction model at the top of the file
+      require("./../models/Interaction.js").deleteMany({
+        post: { $in: allPostIds },
+      }),
     ]);
 
     res.json({
