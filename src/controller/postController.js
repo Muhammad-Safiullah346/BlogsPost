@@ -113,10 +113,6 @@ const updatePost = async (req, res) => {
     // Use the post already loaded by checkOwnership middleware
     const post = req.resource;
 
-    if (!post) {
-      return res.status(404).json({ error: "Post not found" });
-    }
-
     // Update the post fields
     if (title !== undefined) post.title = title;
     if (content !== undefined) post.content = content;
@@ -149,10 +145,6 @@ const deletePost = async (req, res) => {
     // Use the post already loaded by checkOwnership middleware
     const originalPost = req.resource;
 
-    if (!originalPost) {
-      return res.status(404).json({ error: "Post not found" });
-    }
-
     // Get repost IDs for this post
     const repostIds = await Post.find({
       originalPost: id,
@@ -174,8 +166,7 @@ const deletePost = async (req, res) => {
     const [, repostDeleteResult] = await Promise.all([
       Post.deleteOne({ _id: id }),
       Post.deleteMany({ originalPost: id, isRepost: true }),
-      // Import Interaction model at the top of the file
-      require("./../models/Interaction.js").deleteMany({
+      Interaction.deleteMany({
         post: { $in: allPostIds },
       }),
     ]);
@@ -228,7 +219,16 @@ const createRepost = async (req, res) => {
 // Get user's own posts
 const getMyPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, filter } = req.query;
+
+    // Handle special filters
+    if (filter === 'liked') {
+      return getLikedPosts(req, res);
+    }
+    
+    if (filter === 'commented') {
+      return getCommentedPosts(req, res);
+    }
 
     // Base query for user's posts
     const query = { author: req.user._id };

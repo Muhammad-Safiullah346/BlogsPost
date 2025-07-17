@@ -65,13 +65,15 @@ router.delete(
 );
 
 // Public posts access
-router
-  .route("/posts")
-  .get(
-    checkPermission("posts", "Read"),
-    checkConditionalPermission(Post),
-    getPosts
-  );
+router.route("/posts").get(
+  (req, res, next) => {
+    req.ownerView = false;
+    next();
+  },
+  checkPermission("posts", "Read"),
+  checkConditionalPermission(Post),
+  getPosts
+);
 
 router.route("/posts/:id").get(
   (req, res, next) => {
@@ -86,6 +88,10 @@ router.route("/posts/:id").get(
 // Repost - more RESTful route
 router.post(
   "/posts/:id/repost",
+  (req, res, next) => {
+    req.ownerView = false;
+    next();
+  },
   checkPermission("reposts", "Create"),
   checkConditionalPermission(Post),
   validateRepost,
@@ -96,11 +102,19 @@ router.post(
 router
   .route("/posts/:id/interactions")
   .get(
+    (req, res, next) => {
+      req.ownerView = false;
+      next();
+    },
     checkPermission("interactions", "Read"),
     checkConditionalPermission(Post),
     getInteractions
   )
   .post(
+    (req, res, next) => {
+      req.ownerView = false;
+      next();
+    },
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
     validateInteraction,
@@ -111,16 +125,36 @@ router
 router
   .route("/posts/:id/comments/:commentId/interactions")
   .get(
+    (req, res, next) => {
+      req.ownerView = false;
+      next();
+    },
     checkPermission("interactions", "Read"),
     checkConditionalPermission(Post),
     getInteractions
   )
   .post(
+    (req, res, next) => {
+      req.ownerView = false;
+      next();
+    },
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
     validateInteraction,
     createInteraction
   );
+
+router
+  .route("/me/posts")
+  .get(
+    (req, res, next) => {
+      req.ownerView = false;
+      next();
+    },
+    checkPermission("posts", "Read"),
+    getMyPosts(req, res)
+  ) // List my posts
+  .post(checkPermission("posts", "Create"), validatePost, createPost); // Create new post
 
 // User's posts management - allows viewing all post statuses for owner
 router
@@ -146,12 +180,7 @@ router
     deletePost
   );
 
-router
-  .route("/me/posts")
-  .get(checkPermission("posts", "Read"), getMyPosts) // List my posts
-  .post(checkPermission("posts", "Create"), validatePost, createPost); // Create new post
-
-// Get drafts using the regular posts route with draft filter
+// Get drafts using the   regular posts route with draft filter
 router.get(
   "/me/posts/drafts",
   checkPermission("posts", "Read"),
@@ -164,14 +193,6 @@ router.get(
     next();
   },
   getPost
-);
-
-// Filtered personal posts
-router.get("/me/posts/liked", checkPermission("posts", "Read"), getLikedPosts);
-router.get(
-  "/me/posts/commented",
-  checkPermission("posts", "Read"),
-  getCommentedPosts
 );
 
 // Personal interaction history and management
