@@ -72,10 +72,7 @@ const rolePermissions = {
       Delete: "own",
     },
     reposts: {
-      Create: "own",
-      Read: "conditional",
-      Update: "own",
-      Delete: "own",
+      Create: "conditional",
     },
     interactions: {
       Create: "conditional",
@@ -105,9 +102,6 @@ const rolePermissions = {
     posts: {
       Read: "published_only",
     },
-    reposts: {
-      Read: "published_only",
-    },
     interactions: {
       Read: "published_only",
     },
@@ -125,9 +119,14 @@ const rolePermissions = {
 const conditionalPermissions = {
   posts: {
     Read: {
-      user: (post, user) => {
-        if (post.status === "published") return true;
-        return post.author.toString() === user._id.toString();
+      user: (post, user, req) => {
+        // If this is an owner view route (/me/posts/:id), only allow own posts (any status)
+        if (req.ownerView) {
+          return post.author.toString() === user._id.toString();
+        }
+
+        // For public routes (/posts/:id), only allow published posts
+        return post.status === "published";
       },
     },
   },

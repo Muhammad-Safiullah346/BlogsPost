@@ -10,7 +10,10 @@ const postSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: true,
+      required: function () {
+        // Content is required for regular posts, but optional for reposts
+        return !this.isRepost;
+      },
     },
     author: {
       type: mongoose.Schema.Types.ObjectId,
@@ -72,18 +75,27 @@ const postSchema = new mongoose.Schema(
   }
 );
 
-// Create slug from title
-postSchema.pre("save", function (next) {
-  if (this.isModified("title")) {
-    this.slug =
+// Create slug from title - use pre-validate to run before validation
+postSchema.pre("validate", function (next) {
+  // Always generate slug if it doesn't exist or if title is modified
+  if (!this.slug || this.isModified("title")) {
+    // Generate a more robust slug
+    const baseSlug =
       this.title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") +
-      "-" +
-      Date.now();
+        .replace(/^-+|-+$/g, "") || "post"; // fallback if title becomes empty
+
+    // Add timestamp and random component for uniqueness
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    this.slug = `${baseSlug}-${timestamp}-${randomSuffix}`;
   }
   next();
 });
+
+// Indexes for better query performance
+postSchema.index({ author: 1, _id: 1 }); // For ownership checks
+postSchema.index({ originalPost: 1, isRepost: 1 }); // For finding reposts
 
 module.exports = mongoose.model("Post", postSchema);

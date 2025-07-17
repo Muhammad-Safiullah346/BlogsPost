@@ -18,7 +18,6 @@ const createPost = async (req, res) => {
 
     await post.save();
     await post.populate("author", "username profile");
-
     res.status(201).json({
       message: "Post created successfully",
       post,
@@ -112,31 +111,14 @@ const updatePost = async (req, res) => {
     const { id } = req.params;
     const { title, content, tags, featuredImage, excerpt, status } = req.body;
 
-    // Use resource from middleware if available
-    let post = req.resource;
+    let post = await Post.findOneAndUpdate(
+      { _id: id, author: req.user._id },
+      { title, content, tags, featuredImage, excerpt, status },
+      { new: true }
+    ).populate("author", "username profile");
 
     if (!post) {
-      post = await Post.findByIdAndUpdate(
-        id,
-        { title, content, tags, featuredImage, excerpt, status },
-        { new: true }
-      ).populate("author", "username profile");
-    } else {
-      // Update the existing resource
-      Object.assign(post, {
-        title,
-        content,
-        tags,
-        featuredImage,
-        excerpt,
-        status,
-      });
-      await post.save();
-      await post.populate("author", "username profile");
-    }
-
-    if (!post) {
-      return res.status(404).json({ error: "Post not found" });
+      return res.status(404).json({ error: "Post not found or unauthorized" });
     }
 
     res.json({ message: "Post updated successfully", post });
@@ -149,77 +131,56 @@ const deletePost = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Use resource from middleware if available
-    let post = req.resource;
+    // Optimized: Check ownership and get repost IDs in parallel
+    const [originalPost, repostIds] = await Promise.all([
+      Post.findOne({ _id: id, author: req.user._id }),
+      Post.find({ originalPost: id, isRepost: true }).distinct("_id"),
+    ]);
 
-    if (!post) {
-      post = await Post.findByIdAndDelete(id);
-    } else {
-      await Post.findByIdAndDelete(id);
+    if (!originalPost) {
+      return res.status(404).json({ error: "Post not found or unauthorized" });
     }
 
-    if (!post) {
-      return res.status(404).json({ error: "Post not found" });
+    // Check if the post being deleted is a repost
+    if (originalPost.isRepost && originalPost.originalPost) {
+      // If it's a repost, decrement the repostsCount of the original post
+      await Post.findByIdAndUpdate(originalPost.originalPost, {
+        $inc: { repostsCount: -1 },
+      });
     }
 
-    // Delete associated interactions
-    await Interaction.deleteMany({ post: id });
+    // Prepare all post IDs for interaction cleanup
+    const allPostIds = [id, ...repostIds];
 
-    // Handle reposts of this post
-    const reposts = await Post.find({ originalPost: id, isRepost: true });
-
-    if (reposts.length > 0) {
-      // Option 1: Delete all reposts (cascade delete)
-      await Post.deleteMany({ originalPost: id, isRepost: true });
-
-      // Also delete interactions on those reposts
-      const repostIds = reposts.map((repost) => repost._id);
-      await Interaction.deleteMany({ post: { $in: repostIds } });
-    }
+    // Execute all deletions in parallel for maximum performance
+    const [, repostDeleteResult] = await Promise.all([
+      Post.deleteOne({ _id: id }),
+      Post.deleteMany({ originalPost: id, isRepost: true }),
+      Interaction.deleteMany({ post: { $in: allPostIds } }),
+    ]);
 
     res.json({
       message: "Post deleted successfully",
-      repostsDeleted: reposts.length,
+      repostsDeleted: repostDeleteResult.deletedCount,
     });
   } catch (error) {
+    console.error("Delete post error:", error);
     res.status(500).json({ error: "Failed to delete post" });
   }
 };
 
 const createRepost = async (req, res) => {
   try {
-    const { originalPostId, comment } = req.body;
+    const { title, comment } = req.body;
 
-    const originalPost = await Post.findById(originalPostId);
-    if (!originalPost) {
-      return res.status(404).json({ error: "Original post not found" });
-    }
-
-    // UPDATED: Users can only repost published posts (whether their own or others')
-    if (originalPost.status !== "published") {
-      return res.status(403).json({
-        error: "Can only repost published posts",
-      });
-    }
-
-    // Additional check: Prevent reposting your own repost
-    if (
-      originalPost.isRepost &&
-      originalPost.author.toString() === req.user._id.toString()
-    ) {
-      return res.status(400).json({
-        error: "Cannot repost your own repost",
-      });
-    }
-
-    // Note: Users can repost the same post multiple times if desired
+    const originalPost = req.resource;
 
     const repost = new Post({
-      title: `Repost: ${originalPost.title}`,
+      title: title || `Repost: ${originalPost.title}`,
       content: comment || "",
       author: req.user._id,
       isRepost: true,
-      originalPost: originalPostId,
+      originalPost: originalPost._id,
       repostComment: comment,
       status: "published",
     });
@@ -229,7 +190,7 @@ const createRepost = async (req, res) => {
     await repost.populate("originalPost", "title author");
 
     // Update repost count
-    await Post.findByIdAndUpdate(originalPostId, {
+    await Post.findByIdAndUpdate(originalPost._id, {
       $inc: { repostsCount: 1 },
     });
 
@@ -238,7 +199,175 @@ const createRepost = async (req, res) => {
       post: repost,
     });
   } catch (error) {
+    console.error("Repost creation error:", error);
     res.status(500).json({ error: "Failed to create repost" });
+  }
+};
+
+// Get user's own posts
+const getMyPosts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+
+    // Base query for user's posts
+    const query = { author: req.user._id };
+
+    // Add status filter if provided
+    if (status && ["published", "draft", "archived"].includes(status)) {
+      query.status = status;
+    }
+
+    const posts = await Post.find(query)
+      .populate("author", "username profile")
+      .populate("originalPost", "title author")
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Post.countDocuments(query);
+
+    res.json({
+      posts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch your posts" });
+  }
+};
+
+// Get user's draft posts
+const getDraftPosts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    // Query for user's draft posts
+    const query = {
+      author: req.user._id,
+      status: "draft",
+    };
+
+    const posts = await Post.find(query)
+      .populate("author", "username profile")
+      .populate("originalPost", "title author")
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Post.countDocuments(query);
+
+    res.json({
+      posts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch draft posts" });
+  }
+};
+
+// Get posts that the user has liked
+const getLikedPosts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    // First, find all the user's likes
+    const likes = await Interaction.find({
+      user: req.user._id,
+      type: "like",
+      isActive: true,
+      parentComment: null, // Ensure we're only getting post likes, not comment likes
+    }).select("post");
+
+    const postIds = likes.map((like) => like.post);
+
+    // Then get the actual posts
+    const query = {
+      _id: { $in: postIds },
+      $or: [
+        { status: "published" }, // Always show published posts
+        { author: req.user._id }, // Show user's own posts regardless of status
+      ],
+    };
+
+    const posts = await Post.find(query)
+      .populate("author", "username profile")
+      .populate("originalPost", "title author")
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Post.countDocuments(query);
+
+    res.json({
+      posts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch liked posts" });
+  }
+};
+
+// Get posts that the user has commented on
+const getCommentedPosts = async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+
+    // First, find all the user's comments
+    const comments = await Interaction.find({
+      user: req.user._id,
+      type: "comment",
+      isActive: true,
+      parentComment: null, // Only get direct post comments, not replies to comments
+    }).select("post");
+
+    // Remove duplicates (user might have commented multiple times on same post)
+    const postIds = [
+      ...new Set(comments.map((comment) => comment.post.toString())),
+    ];
+
+    // Then get the actual posts
+    const query = {
+      _id: { $in: postIds },
+      $or: [
+        { status: "published" }, // Always show published posts
+        { author: req.user._id }, // Show user's own posts regardless of status
+      ],
+    };
+
+    const posts = await Post.find(query)
+      .populate("author", "username profile")
+      .populate("originalPost", "title author")
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
+
+    const total = await Post.countDocuments(query);
+
+    res.json({
+      posts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch commented posts" });
   }
 };
 
@@ -249,4 +378,8 @@ module.exports = {
   updatePost,
   deletePost,
   createRepost,
+  getMyPosts,
+  getDraftPosts,
+  getLikedPosts,
+  getCommentedPosts,
 };

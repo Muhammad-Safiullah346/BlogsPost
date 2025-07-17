@@ -59,15 +59,44 @@ const validatePost = (req, res, next) => {
   next();
 };
 
+const validatePostUpdate = (req, res, next) => {
+  const schema = Joi.object({
+    title: Joi.string().max(200).optional(),
+    content: Joi.string().optional(),
+    tags: Joi.array().items(Joi.string().max(50)).optional(),
+    featuredImage: Joi.string().uri().optional(),
+    excerpt: Joi.string().max(300).optional(),
+    status: Joi.string().valid("draft", "published", "archived").optional(),
+  }).min(1); // At least one field must be provided
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
 const validateInteraction = (req, res, next) => {
   const schema = Joi.object({
-    type: Joi.string().valid("like", "comment", "repost").required(),
-    content: Joi.string().when("type", {
-      is: Joi.string().valid("comment", "repost"),
-      then: Joi.required(),
-      otherwise: Joi.optional(),
+    type: Joi.string().valid("like", "comment").required(),
+    content: Joi.when("type", {
+      is: "comment",
+      then: Joi.string().required().min(1).max(1000),
+      otherwise: Joi.forbidden(), // For likes
     }),
-    parentComment: Joi.string().optional(),
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
+  next();
+};
+
+const validateRepost = (req, res, next) => {
+  const schema = Joi.object({
+    title: Joi.string().max(200).optional(),
+    comment: Joi.string().max(500).optional(),
   });
 
   const { error } = schema.validate(req.body);
@@ -82,5 +111,7 @@ module.exports = {
   validateLogin,
   validateAccountDeletion,
   validatePost,
+  validatePostUpdate,
   validateInteraction,
+  validateRepost,
 };

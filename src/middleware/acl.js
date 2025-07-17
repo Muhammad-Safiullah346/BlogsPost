@@ -117,14 +117,9 @@ const checkOwnership = (model, ownerField = null) => {
 const checkConditionalPermission = (model, ownerField = null) => {
   return async (req, res, next) => {
     try {
-      // Skip if no conditional permission required
-      if (!req.conditionalPermission) {
+      // Skip if no conditional permission required and no publishedOnly flag
+      if (!req.conditionalPermission && !req.publishedOnly) {
         return next();
-      }
-
-      const { condition } = req.conditionalPermission;
-      if (!condition) {
-        return res.status(403).json({ error: "Access denied" });
       }
 
       let resource;
@@ -136,10 +131,24 @@ const checkConditionalPermission = (model, ownerField = null) => {
           return res.status(404).json({ error: "Resource not found" });
         }
 
-        // Check condition
-        const hasAccess = condition(resource, req.user);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "Access denied" });
+        // Check publishedOnly restriction unless ownerView is true
+        if (req.publishedOnly && !req.ownerView) {
+          if (resource.status !== "published") {
+            return res.status(403).json({ error: "Access denied" });
+          }
+        }
+
+        // Check conditional permission (for regular users)
+        if (req.conditionalPermission) {
+          const { condition } = req.conditionalPermission;
+          if (!condition) {
+            return res.status(403).json({ error: "Access denied" });
+          }
+
+          const hasAccess = condition(resource, req.user, req);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "Access denied" });
+          }
         }
 
         req.resource = resource;
@@ -156,7 +165,51 @@ const checkConditionalPermission = (model, ownerField = null) => {
 };
 
 // New middleware for moderation permissions
-const checkModerationPermission = (model, ownerField = null) => {
+const checkModerationPermission = (resource, action) => {
+  return async (req, res, next) => {
+    try {
+      const userRole = req.userRole || "unknown";
+      const userPermissions = rolePermissions[userRole];
+
+      // Check if role has access to this resource
+      if (!userPermissions || !userPermissions[resource]) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Check if role has permission for this action
+      const permissionLevel = userPermissions[resource][action];
+      if (permissionLevel !== "moderate") {
+        return res
+          .status(403)
+          .json({ error: "Moderation permission required" });
+      }
+
+      // Get the moderation condition
+      const condition = moderationPermissions[resource]?.[action]?.[userRole];
+      if (!condition) {
+        return res
+          .status(403)
+          .json({ error: "No moderation condition defined" });
+      }
+
+      // Store moderation permission for later use
+      req.moderationPermission = {
+        resource,
+        action,
+        condition,
+      };
+
+      next();
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ error: "Moderation permission check failed" });
+    }
+  };
+};
+
+// Middleware to check moderation condition against actual resource
+const checkModerationCondition = (model, ownerField = null) => {
   return async (req, res, next) => {
     try {
       // Skip if no moderation permission required
@@ -173,12 +226,16 @@ const checkModerationPermission = (model, ownerField = null) => {
 
       // For posts, populate author to get role information for permission checks
       const query = model.findById(resourceId);
-      if (model.modelName === "Post" && ownerField === "author") {
+      if (model.modelName === "Post") {
         query.populate("author", "role username");
       }
       // For interactions (comments), populate user and post.author for moderation
       if (model.modelName === "Interaction") {
         query.populate("user", "role username").populate("post", "author");
+      }
+      // For users, no population needed
+      if (model.modelName === "User") {
+        // No population needed for users
       }
 
       const resource = await query;
@@ -197,7 +254,7 @@ const checkModerationPermission = (model, ownerField = null) => {
     } catch (error) {
       return res
         .status(500)
-        .json({ error: "Moderation permission check failed" });
+        .json({ error: "Moderation condition check failed" });
     }
   };
 };
@@ -208,7 +265,7 @@ const checkInteractionPermission = (action) => {
     try {
       const { postId } = req.params;
       const userRole = req.userRole || "unknown";
-      const Post = require("../models/Post");
+      const Post = require("./../models/Post.js");
 
       // Get the post to check its status
       const post = await Post.findById(postId);
