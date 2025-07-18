@@ -80,17 +80,6 @@ const rolePermissions = {
       Update: "conditional",
       Delete: "conditional",
     },
-    likes: {
-      Create: "conditional",
-      Read: "conditional",
-      Delete: "own",
-    },
-    comments: {
-      Create: "conditional",
-      Read: "conditional",
-      Update: "own",
-      Delete: "moderate",
-    },
     users: {
       Read: "own",
       Update: "own",

@@ -26,6 +26,7 @@ const {
   updateInteraction,
   deleteInteraction,
   getInteractionHistory,
+  verifyComment,
 } = require("./../controller/interactionController.js");
 const {
   createPost,
@@ -104,11 +105,13 @@ router
     },
     checkPermission("interactions", "Read"),
     checkConditionalPermission(Post),
+    verifyComment,
     getInteractions
   )
   .post(
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
+    verifyComment,
     validateInteraction,
     createInteraction
   );
@@ -142,7 +145,7 @@ router
 
 // Comment-specific interactions
 router
-  .route("/posts/:id/comments/:commentId/interactions")
+  .route("/posts/:postid/comments/:commentId/interactions")
   .get(
     (req, res, next) => {
       req.ownerView = false;
@@ -150,11 +153,13 @@ router
     },
     checkPermission("interactions", "Read"),
     checkConditionalPermission(Post),
+    verifyComment,
     getInteractions
   )
   .post(
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
+    verifyComment,
     validateInteraction,
     createInteraction
   );
@@ -162,14 +167,9 @@ router
 router
   .route("/posts/:id/comments/:commentId/interactions/:interactionId")
   .put(
-    (req, res, next) => {
-      req.ownerView = false;
-      // Store original post ID before we modify req.params.id
-      req.postId = req.params.id;
-      next();
-    },
     checkPermission("interactions", "Update"),
     checkConditionalPermission(Post), // Uses req.params.id (post ID)
+    verifyComment,
     (req, res, next) => {
       // Now switch to interaction ID for ownership check
       req.params.id = req.params.interactionId;
@@ -180,14 +180,9 @@ router
     updateInteraction
   )
   .delete(
-    (req, res, next) => {
-      req.ownerView = false;
-      // Store original post ID before we modify req.params.id
-      req.postId = req.params.id;
-      next();
-    },
     checkPermission("interactions", "Delete"),
     checkConditionalPermission(Post), // Uses req.params.id (post ID)
+    verifyComment,
     (req, res, next) => {
       // Now switch to interaction ID for ownership check
       req.params.id = req.params.interactionId;
@@ -242,12 +237,14 @@ router
     },
     checkPermission("interactions", "Read"),
     checkConditionalPermission(Post),
+    verifyComment,
     getInteractions
   )
   .post(
     checkPermission("interactions", "Create"),
     checkConditionalPermission(Post),
     validateInteraction,
+    verifyComment,
     createInteraction
   )
   .put(

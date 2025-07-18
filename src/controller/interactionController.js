@@ -4,32 +4,8 @@ const Post = require("./../models/Post.js");
 const createInteraction = async (req, res) => {
   try {
     const postId = req.params.id;
+    const commentId = commentId; // For comment interactions
     const { type, content } = req.body;
-
-    // If parentComment is provided, validate it exists and belongs to this post
-    if (req.params.commentId) {
-      const parentInteraction = await Interaction.findById(
-        req.params.commentId
-      );
-      if (!parentInteraction) {
-        return res.status(404).json({ error: "Parent comment not found" });
-      }
-      if (parentInteraction.post.toString() !== postId) {
-        return res
-          .status(400)
-          .json({ error: "Parent comment does not belong to this post" });
-      }
-      if (parentInteraction.type !== "comment") {
-        return res
-          .status(400)
-          .json({ error: "Can only interact with comments" });
-      }
-      if (!parentInteraction.isActive) {
-        return res
-          .status(400)
-          .json({ error: "Cannot interact with deleted comments" });
-      }
-    }
 
     // For likes, check if user already liked the post or comment
     if (type === "like") {
@@ -37,7 +13,7 @@ const createInteraction = async (req, res) => {
         user: req.user._id,
         post: postId,
         type: "like",
-        parentComment: req.params.commentId || null,
+        parentComment: commentId || null,
       });
 
       if (existingLike) {
@@ -47,21 +23,21 @@ const createInteraction = async (req, res) => {
         });
 
         // Update post counters (only for direct post interactions)
-        if (!req.params.commentId) {
+        if (!commentId) {
           await Post.findByIdAndUpdate(postId, {
             $inc: { likesCount: -1 },
           });
         }
 
         // If this was a like on a comment, update comment's like count
-        if (req.params.commentId) {
-          await Interaction.findByIdAndUpdate(req.params.commentId, {
+        if (commentId) {
+          await Interaction.findByIdAndUpdate(commentId, {
             $inc: { likesCount: -1 },
           });
         }
 
         return res.status(200).json({
-          message: req.params.commentId
+          message: commentId
             ? "Comment like removed successfully"
             : "Post like removed successfully",
           action: "removed",
@@ -76,14 +52,14 @@ const createInteraction = async (req, res) => {
       post: postId,
       type,
       content,
-      parentComment: req.params.commentId,
+      parentComment: commentId || null,
     });
 
     await interaction.save();
     await interaction.populate("user", "username profile");
 
     // Update post counters (only for direct post interactions)
-    if (!req.params.commentId) {
+    if (!commentId) {
       const updateField =
         type === "like"
           ? "likesCount"
@@ -97,8 +73,8 @@ const createInteraction = async (req, res) => {
     }
 
     // If this is an interaction on a comment, update its counters
-    if (req.params.commentId && (type === "like" || type === "comment")) {
-      await Interaction.findByIdAndUpdate(req.params.commentId, {
+    if (commentId && (type === "like" || type === "comment")) {
+      await Interaction.findByIdAndUpdate(commentId, {
         $inc: {
           likesCount: type === "like" ? 1 : 0,
           repliesCount: type === "comment" ? 1 : 0,
@@ -116,36 +92,40 @@ const createInteraction = async (req, res) => {
   }
 };
 
+const verifyComment = async (req, res) => {
+  try {
+    const parentInteraction = await Interaction.findById(req.params.commentId);
+    if (!parentInteraction) {
+      return res.status(404).json({ error: "Parent comment not found" });
+    } else if (parentInteraction.post.toString() !== req.resource._id) {
+      return res
+        .status(400)
+        .json({ error: "Parent comment does not belong to this post" });
+    } else if (parentInteraction.type !== "comment") {
+      return res.status(400).json({ error: "Can only interact with comments" });
+    } else if (!parentInteraction.isActive) {
+      return res
+        .status(400)
+        .json({ error: "Cannot interact with deleted comments" });
+    }
+    req.response = parentInteraction;
+    next();
+  } catch (error) {
+    res.status(500).json({ error: "Failed to verify comment" });
+  }
+};
+
 const getInteractions = async (req, res) => {
   try {
     const postId = req.params.id;
-    const commentId = req.params.commentId; // For comment interactions
+    const commentId = commentId; // For comment interactions
     const { page = 1, limit = 20, type } = req.query;
 
     // Get post from middleware or fetch it
     let post = req.resource;
 
-    // If commentId is provided, validate the comment exists
-    if (commentId) {
-      const comment = await Interaction.findById(commentId);
-      if (!comment) {
-        return res.status(404).json({ error: "Comment not found" });
-      }
-      if (comment.post.toString() !== postId) {
-        return res
-          .status(400)
-          .json({ error: "Comment does not belong to this post" });
-      }
-      if (comment.type !== "comment") {
-        return res.status(400).json({ error: "Invalid comment ID" });
-      }
-      if (!comment.isActive) {
-        return res.status(400).json({ error: "Comment is not active" });
-      }
-    }
-
     // Determine the parentComment filter based on route
-    const parentCommentFilter = commentId ? commentId : null;
+    const parentCommentFilter = commentId || null;
 
     // If no type specified, return only counts
     if (!type) {
@@ -329,7 +309,7 @@ const getInteractions = async (req, res) => {
 
 const updateInteraction = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params.id;
     const { content } = req.body;
 
     const interaction = await Interaction.findByIdAndUpdate(
@@ -350,7 +330,7 @@ const updateInteraction = async (req, res) => {
 
 const deleteInteraction = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params.id;
 
     const interaction = await Interaction.findByIdAndUpdate(
       id,
@@ -466,4 +446,5 @@ module.exports = {
   updateInteraction,
   deleteInteraction,
   getInteractionHistory,
+  verifyComment,
 };
