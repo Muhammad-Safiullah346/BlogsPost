@@ -72,6 +72,7 @@ router.route("/posts").get(
     next();
   },
   checkPermission("posts", "Read"),
+  checkConditionalPermission(Post),
   getPosts
 );
 
@@ -199,6 +200,7 @@ router
       next();
     },
     checkPermission("posts", "Read"),
+    checkConditionalPermission(Post),
     getPosts
   ) // List my posts
   .post(checkPermission("posts", "Create"), validatePost, createPost); // Create new post
