@@ -7,6 +7,7 @@ const {
   checkConditionalPermission,
 } = require("./../middleware/acl.js");
 const Post = require("./../models/Post.js");
+const Interaction = require("./../models/Interaction.js");
 const {
   getProfile,
   updateProfile,
@@ -71,7 +72,6 @@ router.route("/posts").get(
     next();
   },
   checkPermission("posts", "Read"),
-  checkConditionalPermission(Post),
   getPosts
 );
 
@@ -117,27 +117,26 @@ router
 router
   .route("/posts/:id/interactions/:interactionId")
   .put(
+    checkPermission("interactions", "Update"),
+    checkConditionalPermission(Post), // Uses req.params.id (post ID)
     (req, res, next) => {
-      req.ownerView = false;
+      // Now switch to interaction ID for ownership check
       req.params.id = req.params.interactionId;
       next();
     },
-    checkPermission("interactions", "Update"),
-    checkConditionalPermission(Post),
-    checkOwnership(Interaction, "user"),
+    checkOwnership(Interaction, "user"), // Uses req.params.id (interaction ID)
     validateInteraction,
     updateInteraction
   )
   .delete(
+    checkPermission("interactions", "Delete"),
+    checkConditionalPermission(Post), // Uses req.params.id (post ID)
     (req, res, next) => {
-      req.ownerView = false;
-      // Set the interaction ID as the main resource ID for ownership check
+      // Now switch to interaction ID for ownership check
       req.params.id = req.params.interactionId;
       next();
     },
-    checkPermission("interactions", "Delete"),
-    checkConditionalPermission(Post),
-    checkOwnership(Interaction, "user"),
+    checkOwnership(Interaction, "user"), // Uses req.params.id (interaction ID)
     deleteInteraction
   );
 
@@ -165,25 +164,36 @@ router
   .put(
     (req, res, next) => {
       req.ownerView = false;
-      req.params.id = req.params.interactionId;
+      // Store original post ID before we modify req.params.id
+      req.postId = req.params.id;
       next();
     },
     checkPermission("interactions", "Update"),
-    checkConditionalPermission(Post),
-    checkOwnership(Interaction, "user"),
+    checkConditionalPermission(Post), // Uses req.params.id (post ID)
+    (req, res, next) => {
+      // Now switch to interaction ID for ownership check
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkOwnership(Interaction, "user"), // Uses req.params.id (interaction ID)
     validateInteraction,
     updateInteraction
   )
   .delete(
     (req, res, next) => {
       req.ownerView = false;
-      // Set the interaction ID as the main resource ID for ownership check
-      req.params.id = req.params.interactionId;
+      // Store original post ID before we modify req.params.id
+      req.postId = req.params.id;
       next();
     },
     checkPermission("interactions", "Delete"),
-    checkConditionalPermission(Post),
-    checkOwnership(Interaction, "user"),
+    checkConditionalPermission(Post), // Uses req.params.id (post ID)
+    (req, res, next) => {
+      // Now switch to interaction ID for ownership check
+      req.params.id = req.params.interactionId;
+      next();
+    },
+    checkOwnership(Interaction, "user"), // Uses req.params.id (interaction ID)
     deleteInteraction
   );
 
@@ -210,6 +220,35 @@ router
     checkPermission("posts", "Read"),
     checkConditionalPermission(Post),
     getPost
+  )
+  .put(
+    checkPermission("posts", "Update"),
+    checkOwnership(Post, "author"),
+    validatePostUpdate,
+    updatePost
+  )
+  .delete(
+    checkPermission("posts", "Delete"),
+    checkOwnership(Post, "author"),
+    deletePost
+  );
+
+router
+  .route("/me/posts/:id/interactions")
+  .get(
+    (req, res, next) => {
+      req.ownerView = true;
+      next();
+    },
+    checkPermission("interactions", "Read"),
+    checkConditionalPermission(Post),
+    getInteractions
+  )
+  .post(
+    checkPermission("interactions", "Create"),
+    checkConditionalPermission(Post),
+    validateInteraction,
+    createInteraction
   )
   .put(
     checkPermission("posts", "Update"),

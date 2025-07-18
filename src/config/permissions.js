@@ -156,11 +156,12 @@ const conditionalPermissions = {
     },
     Update: {
       user: (post, user, req) => {
-        // If this is an owner view route (/me/posts/:id), only allow own posts (any status)
-        if (req.ownerView) {
-          return post.author.toString() === user._id.toString();
-        }
-
+        // For public routes (/posts/:id), only allow published posts
+        return post.status === "published";
+      },
+    },
+    Delete: {
+      user: (post, user, req) => {
         // For public routes (/posts/:id), only allow published posts
         return post.status === "published";
       },
