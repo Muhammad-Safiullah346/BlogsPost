@@ -147,35 +147,39 @@ const checkConditionalPermission = (model, ownerField = null) => {
         }
 
         req.resource = resource;
-      }
-
-      // For list requests (no specific ID), set up query filters
-      if (!req.params.id) {
-        // Set up conditional filters for list queries
-        req.conditionalFilters = {};
+        // For list requests (no specific ID), query database and set resources
+      } // For list requests (no specific ID), query database and set resources
+      else if (!req.params.id) {
+        let query = {};
 
         if (req.conditionalPermission) {
-          const { resource: resourceType, action } = req.conditionalPermission;
+          const { condition } = req.conditionalPermission;
 
-          // Apply filters based on resource type and action
-          if (resourceType === "posts" && action === "Read") {
-            if (req.userRole === "user") {
-              if (req.ownerView) {
-                // For owner view (/me/posts), show only user's own posts (all statuses)
-                req.conditionalFilters.author = req.user._id;
-              } else {
-                // UPDATED LOGIC: For public view (/posts), show ONLY published posts
-                // Remove the ability to see user's own unpublished posts in public feed
-                req.conditionalFilters.status = "published";
-              }
+          if (condition && req.userRole === "user") {
+            // Build query based on what the condition would allow
+            if (req.ownerView) {
+              // For owner view (/me/posts), show only user's own posts (all statuses)
+              query.author = req.user._id;
+            } else {
+              // For public view (/posts), show only published posts
+              query.status = "published";
             }
           }
         }
 
         if (req.publishedOnly && !req.ownerView) {
           // For unknown users or when explicitly restricted to published only
-          req.conditionalFilters.status = "published";
+          query.status = "published";
         }
+
+        // Query database and set resources
+        const resources = await model
+          .find(query)
+          .populate("author", "username profile")
+          .populate("originalPost", "title author")
+          .sort({ createdAt: -1 });
+
+        req.resource = resources;
       }
 
       next();
