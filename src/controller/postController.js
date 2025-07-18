@@ -29,26 +29,50 @@ const createPost = async (req, res) => {
 
 const getPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, author, tag } = req.query;
+    const { page = 1, limit = 10, status, author, tag, filter } = req.query;
 
     let query = {};
 
     // Apply conditional filters based on user role and permissions
     query = applyConditionalFilter(query, req);
 
+    // Handle special filters for owner view
+    if (req.ownerView && filter) {
+      if (filter === "liked") {
+        return getLikedPosts(req, res);
+      }
+
+      if (filter === "commented") {
+        return getCommentedPosts(req, res);
+      }
+    }
+
     // Apply additional filters
     if (status && !req.publishedOnly) {
       // Only allow status filtering if not restricted to published only
       if (req.userRole === "user") {
-        // Users can only filter their own non-published posts
-        if (status !== "published") {
-          query.author = req.user._id;
+        // For owner view, users can filter their own posts by any status
+        if (req.ownerView) {
+          // User is already filtered by author from conditional filters
+          if (["published", "draft", "archived"].includes(status)) {
+            query.status = status;
+          }
+        } else {
+          // For public view, users can only filter published posts or their own posts
+          if (status !== "published") {
+            // If filtering non-published, must be their own posts
+            query.author = req.user._id;
+          }
+          query.status = status;
         }
+      } else if (req.userRole === "admin" || req.userRole === "superadmin") {
+        // Admins and superadmins can filter by any status
+        query.status = status;
       }
-      query.status = status;
     }
 
-    if (author) {
+    if (author && !req.ownerView) {
+      // Only allow author filtering in public view, not owner view
       query.author = author;
     }
 
@@ -213,51 +237,6 @@ const createRepost = async (req, res) => {
   } catch (error) {
     console.error("Repost creation error:", error);
     res.status(500).json({ error: "Failed to create repost" });
-  }
-};
-
-// Get user's own posts
-const getMyPosts = async (req, res) => {
-  try {
-    const { page = 1, limit = 10, status, filter } = req.query;
-
-    // Handle special filters
-    if (filter === 'liked') {
-      return getLikedPosts(req, res);
-    }
-    
-    if (filter === 'commented') {
-      return getCommentedPosts(req, res);
-    }
-
-    // Base query for user's posts
-    const query = { author: req.user._id };
-
-    // Add status filter if provided
-    if (status && ["published", "draft", "archived"].includes(status)) {
-      query.status = status;
-    }
-
-    const posts = await Post.find(query)
-      .populate("author", "username profile")
-      .populate("originalPost", "title author")
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Post.countDocuments(query);
-
-    res.json({
-      posts,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch your posts" });
   }
 };
 

@@ -149,7 +149,37 @@ const checkConditionalPermission = (model, ownerField = null) => {
         req.resource = resource;
       }
 
-      // For list requests, condition will be applied in controller
+      // For list requests (no specific ID), set up query filters
+      if (!req.params.id) {
+        // Set up conditional filters for list queries
+        req.conditionalFilters = {};
+
+        if (req.conditionalPermission) {
+          const { resource: resourceType, action } = req.conditionalPermission;
+
+          // Apply filters based on resource type and action
+          if (resourceType === "posts" && action === "Read") {
+            if (req.userRole === "user") {
+              if (req.ownerView) {
+                // For owner view (/me/posts), show only user's own posts (all statuses)
+                req.conditionalFilters.author = req.user._id;
+              } else {
+                // For public view, show published posts OR user's own posts
+                req.conditionalFilters.$or = [
+                  { status: "published" },
+                  { author: req.user._id },
+                ];
+              }
+            }
+          }
+        }
+
+        if (req.publishedOnly && !req.ownerView) {
+          // For unknown users or when explicitly restricted to published only
+          req.conditionalFilters.status = "published";
+        }
+      }
+
       next();
     } catch (error) {
       return res

@@ -35,7 +35,6 @@ const {
   updatePost,
   deletePost,
   createRepost,
-  getMyPosts,
   getDraftPosts,
   getLikedPosts,
   getCommentedPosts,
@@ -200,7 +199,7 @@ router
       next();
     },
     checkPermission("posts", "Read"),
-    getMyPosts
+    getPosts
   ) // List my posts
   .post(checkPermission("posts", "Create"), validatePost, createPost); // Create new post
 
