@@ -164,11 +164,9 @@ const checkConditionalPermission = (model, ownerField = null) => {
                 // For owner view (/me/posts), show only user's own posts (all statuses)
                 req.conditionalFilters.author = req.user._id;
               } else {
-                // For public view, show published posts OR user's own posts
-                req.conditionalFilters.$or = [
-                  { status: "published" },
-                  { author: req.user._id },
-                ];
+                // UPDATED LOGIC: For public view (/posts), show ONLY published posts
+                // Remove the ability to see user's own unpublished posts in public feed
+                req.conditionalFilters.status = "published";
               }
             }
           }
